@@ -34,6 +34,8 @@
 #    2024-03-18 - removed integration_summary and simply take the mean, and now the standard deviation; also, renames high_res to all_cycles
 #    2024-03-19 - uploaded to bob, all_cycles saved as hdf5 file
 #    2024-04-02 - making sure it works on bob and zax
+#    2024-04-26 - found bug in all_cycles block where it errors out if not cycles exist, fixed with if cycles exist
+#    2024-04-30 - updated residual gas threshold from 0.005 to 0.010
 #
 # ToDo:
 #    - outlier function needs work
@@ -45,7 +47,7 @@
 
 # -------------------- Introduction ------------------------
 
-psi_R_version <- "psi.R - v2024.04.02"
+psi_R_version <- "psi.R - v2024.04.26"
 message("\n")
 message("Running ", psi_R_version)
 message("\n")
@@ -658,7 +660,7 @@ if (length(new_session_paths)>0){
                         comment <- paste(comment, "mass set to NA for RefGas", sep="; ")
                     }
                 }
-                if (as.numeric(residual_gas) > 0.005){
+                if (as.numeric(residual_gas) > 0.010){
                     residual_gas_flag <- TRUE
                     comment <- paste(comment, "residual gas high", sep="; ")
                 }
@@ -754,7 +756,7 @@ if (length(new_session_paths)>0){
                     points(D48$odi, D48$data[D48$odi], pch=8, col='red')
                     
                     message("            Analysis time: ", analysis_string_time)
-                    message("            Residual Gas: ", round(as.numeric(residual_gas), 5), " mbar", if (residual_gas_flag){"    ** FLAGGED WITH HIGH RESIDUAL GAS **"})
+                    message("            Residual Gas: ", round(as.numeric(residual_gas), 5), " mbar", if (residual_gas_flag){"    ** UPDATED !! - FLAGGED WITH HIGH RESIDUAL GAS **"})
                     message("            Chops: ", nchops, if (chops_flag){"    ** BELLOWS MODE **"})
                     message("            Signal Balance: ", if (balance_flag){"    ** FLAGGED AS MISBALANCED **"})
                     message("                Starting Balance: ", round(balance[1], 3), " %")
@@ -813,31 +815,33 @@ if (length(new_session_paths)>0){
             write(data_file, processed_files_log, sep="", append=TRUE)
 
 
-            # save all high res data into single data frame
-            all_cycles <- data.frame(c(1:ncycles), wg_cycles_44, sam_cycles_44, wg_cycles_45, sam_cycles_45, wg_cycles_46, sam_cycles_46,
-                                     wg_cycles_47, sam_cycles_47, wg_cycles_48, sam_cycles_48, wg_cycles_44sd, sam_cycles_44sd,
-                                     wg_cycles_45sd, sam_cycles_45sd, wg_cycles_46sd, sam_cycles_46sd, wg_cycles_47sd, sam_cycles_47sd,
-                                     wg_cycles_48sd, sam_cycles_48sd, R45wg$data, R45sam$data, R46wg$data, R46sam$data, R47wg$data,
-                                     R47sam$data, R48wg$data, R48sam$data, d45$data, d46$data, d47$data, d48$data, d13C$data, d18O$data,
-                                     D47$data, D48$data, d45$data - d45$m, d46$data - d46$m, d47$data - d47$m, d48$data - d48$m,
-                                     d13C$data - d13C$m, d18O$data - d18O$m, D47$data - D47$m, D48$data - D48$m)
+            if (exists('ncycles')){
+                # save all high res data into single data frame
+                all_cycles <- data.frame(c(1:ncycles), wg_cycles_44, sam_cycles_44, wg_cycles_45, sam_cycles_45, wg_cycles_46, sam_cycles_46,
+                                         wg_cycles_47, sam_cycles_47, wg_cycles_48, sam_cycles_48, wg_cycles_44sd, sam_cycles_44sd,
+                                         wg_cycles_45sd, sam_cycles_45sd, wg_cycles_46sd, sam_cycles_46sd, wg_cycles_47sd, sam_cycles_47sd,
+                                         wg_cycles_48sd, sam_cycles_48sd, R45wg$data, R45sam$data, R46wg$data, R46sam$data, R47wg$data,
+                                         R47sam$data, R48wg$data, R48sam$data, d45$data, d46$data, d47$data, d48$data, d13C$data, d18O$data,
+                                         D47$data, D48$data, d45$data - d45$m, d46$data - d46$m, d47$data - d47$m, d48$data - d48$m,
+                                         d13C$data - d13C$m, d18O$data - d18O$m, D47$data - D47$m, D48$data - D48$m)
 
-            all_cycles_column_names <- c('cycle', 'wg_cycles_44', 'sam_cycles_44', 'wg_cycles_45', 'sam_cycles_45', 'wg_cycles_46', 'sam_cycles_46',
-                                     'wg_cycles_47', 'sam_cycles_47', 'wg_cycles_48', 'sam_cycles_48', 'wg_cycles_44sd', 'sam_cycles_44sd',
-                                     'wg_cycles_45sd', 'sam_cycles_45sd', 'wg_cycles_46sd', 'sam_cycles_46sd', 'wg_cycles_47sd', 'sam_cycles_47sd',
-                                     'wg_cycles_48sd', 'sam_cycles_48sd', 'R45wg', 'R45sam', 'R46wg', 'R46sam', 'R47wg',
-                                     'R47sam', 'R48wg', 'R48sam', 'd45', 'd46', 'd47', 'd48', 'd13C', 'd18O',
-                                     'D47', 'D48', 'd45residual', 'd46residual', 'd47residual', 'd48residual',
-                                     'd13Cresidual', 'd18Oresidual', 'D47residual', 'D48residual')
-            colnames(all_cycles) <- all_cycles_column_names
+                all_cycles_column_names <- c('cycle', 'wg_cycles_44', 'sam_cycles_44', 'wg_cycles_45', 'sam_cycles_45', 'wg_cycles_46', 'sam_cycles_46',
+                                         'wg_cycles_47', 'sam_cycles_47', 'wg_cycles_48', 'sam_cycles_48', 'wg_cycles_44sd', 'sam_cycles_44sd',
+                                         'wg_cycles_45sd', 'sam_cycles_45sd', 'wg_cycles_46sd', 'sam_cycles_46sd', 'wg_cycles_47sd', 'sam_cycles_47sd',
+                                         'wg_cycles_48sd', 'sam_cycles_48sd', 'R45wg', 'R45sam', 'R46wg', 'R46sam', 'R47wg',
+                                         'R47sam', 'R48wg', 'R48sam', 'd45', 'd46', 'd47', 'd48', 'd13C', 'd18O',
+                                         'D47', 'D48', 'd45residual', 'd46residual', 'd47residual', 'd48residual',
+                                         'd13Cresidual', 'd18Oresidual', 'D47residual', 'D48residual')
+                colnames(all_cycles) <- all_cycles_column_names
 
-            psi_all_cycles_file <- paste(project_dir, results_dir, session$name, paste("psi_", session$name, "_all_cycles.hdf5", sep=""), sep="/")
-            h5dataset <- paste('/UID',sn,sep="")
-            tryCatch({
-                h5write(all_cycles, psi_all_cycles_file, h5dataset)
-            }, error = function(e) {
-                message(paste('        Sample UID ',sn,' is already in the hdf5 file.', sep=""))
-            })            
+                psi_all_cycles_file <- paste(project_dir, results_dir, session$name, paste("psi_", session$name, "_all_cycles.hdf5", sep=""), sep="/")
+                h5dataset <- paste('/UID',sn,sep="")
+                tryCatch({
+                    h5write(all_cycles, psi_all_cycles_file, h5dataset)
+                }, error = function(e) {
+                    message(paste('        Sample UID ',sn,' is already in the hdf5 file.', sep=""))
+                })
+            }
         }
     }
 
