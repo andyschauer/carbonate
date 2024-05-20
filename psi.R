@@ -36,6 +36,8 @@
 #    2024-04-02 - making sure it works on bob and zax
 #    2024-04-26 - found bug in all_cycles block where it errors out if not cycles exist, fixed with if cycles exist
 #    2024-04-30 - updated residual gas threshold from 0.005 to 0.010
+#    2024-05-18 - added bulk vs clumped conditional parts so psi.R can be used for both clumped and bulk runs
+#
 #
 # ToDo:
 #    - outlier function needs work
@@ -47,7 +49,7 @@
 
 # -------------------- Introduction ------------------------
 
-psi_R_version <- "psi.R - v2024.04.26"
+psi_R_version <- "psi.R - v2024.05.18"
 message("\n")
 message("Running ", psi_R_version)
 message("\n")
@@ -221,29 +223,44 @@ session <- get_session()
 
 comment <- ""
 
-samplelog_headers <- c("UID", "analysis_time", "Sample", "material_type", "flag","comment",
-                       "d13C", "d13Csd", "d13Cn", "d13Cslope", "d13Cr2", "d13Cpval",
-                       "d18O", "d18Osd", "d18On", "d18Oslope", "d18Or2", "d18Opval",
-                       "d45", "d45sd", "d45n", "d45slope", "d45r2", "d45pval",
-                       "d46", "d46sd", "d46n", "d46slope", "d46r2", "d46pval",
-                       "d47", "d47sd", "d47n", "d47slope", "d47r2", "d47pval",
-                       "D47raw", "D47sd", "D47n", "D47slope", "D47r2", "D47pval",
-                       "d48", "d48sd", "d48n", "d48slope", "d48r2", "d48pval",
-                       "D48raw", "D48sd", "D48n", "D48slope", "D48r2", "D48pval",
-                       "d49", "d49sd", "d49n", "d49slope", "d49r2", "d49pval",
-                       "D49raw", "D49sd", "D49n", "D49slope", "D49r2", "D49pval",
-                       "R45sam_mean", "R45sam_sd", "R45wg_mean", "R45wg_sd", "R45sam_wg",
-                       "R46sam_mean", "R46sam_sd", "R46wg_mean", "R46wg_sd", "R46sam_wg",
-                       "R47sam_mean", "R47sam_sd", "R47wg_mean", "R47wg_sd", "R47sam_wg",
-                       "R48sam_mean", "R48sam_sd", "R48wg_mean", "R48wg_sd", "R48sam_wg",
-                       "R49sam_mean", "R49sam_sd", "R49wg_mean", "R49wg_sd", "R49sam_wg",
-                       "bkgnd_44", "bkgnd_45", "bkgnd_46", "bkgnd_47", "bkgnd_48", "bkgnd_49",
-                       "unix_time", "batch_name", "Nu_software_Version","psi_R_versions",
-                       "mass", "sample_pressure", "yield_mbar_ug", "residual_gas", "nchops", "min_ref_beam", "max_ref_beam",
-                       "total_blocks", "total_cycles",
-                       "initial_sample_beam", "pre_balance_sample_beam", "nu_balance",
-                       "sam_max44nA", "sam_mean44nA", "sam_min44nA", "sam_max47nA", "sam_mean47nA", "sam_min47nA",
-                       "min_balance", "mean_balance", "max_balance", "sam_decay", "wg_decay")
+
+samplelog_headers_clumped <- c("UID", "analysis_time", "Sample", "material_type", "flag","comment",
+                               "d13C", "d13Csd", "d13Cn", "d13Cslope", "d13Cr2", "d13Cpval",
+                               "d18O", "d18Osd", "d18On", "d18Oslope", "d18Or2", "d18Opval",
+                               "d45", "d45sd", "d45n", "d45slope", "d45r2", "d45pval",
+                               "d46", "d46sd", "d46n", "d46slope", "d46r2", "d46pval",
+                               "d47", "d47sd", "d47n", "d47slope", "d47r2", "d47pval",
+                               "D47raw", "D47sd", "D47n", "D47slope", "D47r2", "D47pval",
+                               "d48", "d48sd", "d48n", "d48slope", "d48r2", "d48pval",
+                               "D48raw", "D48sd", "D48n", "D48slope", "D48r2", "D48pval",
+                               "d49", "d49sd", "d49n", "d49slope", "d49r2", "d49pval",
+                               "D49raw", "D49sd", "D49n", "D49slope", "D49r2", "D49pval",
+                               "R45sam_mean", "R45sam_sd", "R45wg_mean", "R45wg_sd", "R45sam_wg",
+                               "R46sam_mean", "R46sam_sd", "R46wg_mean", "R46wg_sd", "R46sam_wg",
+                               "R47sam_mean", "R47sam_sd", "R47wg_mean", "R47wg_sd", "R47sam_wg",
+                               "R48sam_mean", "R48sam_sd", "R48wg_mean", "R48wg_sd", "R48sam_wg",
+                               "R49sam_mean", "R49sam_sd", "R49wg_mean", "R49wg_sd", "R49sam_wg",
+                               "bkgnd_44", "bkgnd_45", "bkgnd_46", "bkgnd_47", "bkgnd_48", "bkgnd_49",
+                               "unix_time", "batch_name", "Nu_software_Version","psi_R_versions",
+                               "mass", "sample_pressure", "yield_mbar_ug", "residual_gas", "nchops", "min_ref_beam", "max_ref_beam",
+                               "total_blocks", "total_cycles",
+                               "initial_sample_beam", "pre_balance_sample_beam", "nu_balance",
+                               "sam_max44nA", "sam_mean44nA", "sam_min44nA", "sam_max47nA", "sam_mean47nA", "sam_min47nA",
+                               "min_balance", "mean_balance", "max_balance", "sam_decay", "wg_decay")
+
+samplelog_headers_bulk <- c("UID", "analysis_time", "Sample", "material_type", "flag","comment",
+                           "d13C", "d13Csd", "d13Cn", "d13Cslope", "d13Cr2", "d13Cpval",
+                           "d18O", "d18Osd", "d18On", "d18Oslope", "d18Or2", "d18Opval",
+                           "d45", "d45sd", "d45n", "d45slope", "d45r2", "d45pval",
+                           "d46", "d46sd", "d46n", "d46slope", "d46r2", "d46pval",
+                           "R45sam_mean", "R45sam_sd", "R45wg_mean", "R45wg_sd", "R45sam_wg",
+                           "R46sam_mean", "R46sam_sd", "R46wg_mean", "R46wg_sd", "R46sam_wg",
+                           "unix_time", "batch_name", "Nu_software_Version","psi_R_versions",
+                           "mass", "sample_pressure", "yield_mbar_ug", "residual_gas", "nchops", "min_ref_beam", "max_ref_beam",
+                           "total_blocks", "total_cycles",
+                           "initial_sample_beam", "pre_balance_sample_beam", "nu_balance",
+                           "sam_max44nA", "sam_mean44nA", "sam_min44nA",
+                           "min_balance", "mean_balance", "max_balance", "sam_decay", "wg_decay")
 
 
 
@@ -319,6 +336,11 @@ if (length(new_session_paths)>0){
             raw_data <- read.table(data_file, header=FALSE, fill=TRUE, sep="", col.names=paste('col', 1:21, sep=""))
 
             # get run meta data
+            if (substr(raw_data[1,1],1,7)=='Clumped'){
+                analysis_type <- 'clumped'    
+            } else {
+                analysis_type <- 'bulk'
+            }
             batch_name <- substr(data_file, regexpr(session$name,data_file)[1]+nchar(session$name), regexpr('Data_',data_file)[1]-2)
             batch_name <- gsub("/", "", batch_name)
             CF_status <- gsub(",|\"|\"", "", raw_data[which(raw_data == "Cold finger status", arr.ind = TRUE)[1],2])
@@ -385,31 +407,30 @@ if (length(new_session_paths)>0){
 
                 message("        Sample ", sample_name, " (sn - ", sn, ") has ", total_cycles, " cycles in ", nblocks, " blocks")
 
-                wg_cycles_49 <- vector(mode="numeric", length=total_cycles)
-                wg_cycles_48 <- vector(mode="numeric", length=total_cycles)
-                wg_cycles_47 <- vector(mode="numeric", length=total_cycles)
+                if (analysis_type=='clumped'){
+                    wg_cycles_49 <- vector(mode="numeric", length=total_cycles)
+                    wg_cycles_48 <- vector(mode="numeric", length=total_cycles)
+                    wg_cycles_47 <- vector(mode="numeric", length=total_cycles)
+                    wg_cycles_49sd <- vector(mode="numeric", length=total_cycles)
+                    wg_cycles_48sd <- vector(mode="numeric", length=total_cycles)
+                    wg_cycles_47sd <- vector(mode="numeric", length=total_cycles)
+                    sam_cycles_49 <- vector(mode="numeric", length=total_cycles)
+                    sam_cycles_48 <- vector(mode="numeric", length=total_cycles)
+                    sam_cycles_47 <- vector(mode="numeric", length=total_cycles)
+                    sam_cycles_49sd <- vector(mode="numeric", length=total_cycles)
+                    sam_cycles_48sd <- vector(mode="numeric", length=total_cycles)
+                    sam_cycles_47sd <- vector(mode="numeric", length=total_cycles)
+                }
+
                 wg_cycles_46 <- vector(mode="numeric", length=total_cycles)
                 wg_cycles_45 <- vector(mode="numeric", length=total_cycles)
                 wg_cycles_44 <- vector(mode="numeric", length=total_cycles)
-
-                wg_cycles_49sd <- vector(mode="numeric", length=total_cycles)
-                wg_cycles_48sd <- vector(mode="numeric", length=total_cycles)
-                wg_cycles_47sd <- vector(mode="numeric", length=total_cycles)
                 wg_cycles_46sd <- vector(mode="numeric", length=total_cycles)
                 wg_cycles_45sd <- vector(mode="numeric", length=total_cycles)
                 wg_cycles_44sd <- vector(mode="numeric", length=total_cycles)
-
-
-                sam_cycles_49 <- vector(mode="numeric", length=total_cycles)
-                sam_cycles_48 <- vector(mode="numeric", length=total_cycles)
-                sam_cycles_47 <- vector(mode="numeric", length=total_cycles)
                 sam_cycles_46 <- vector(mode="numeric", length=total_cycles)
                 sam_cycles_45 <- vector(mode="numeric", length=total_cycles)
                 sam_cycles_44 <- vector(mode="numeric", length=total_cycles)
-
-                sam_cycles_49sd <- vector(mode="numeric", length=total_cycles)
-                sam_cycles_48sd <- vector(mode="numeric", length=total_cycles)
-                sam_cycles_47sd <- vector(mode="numeric", length=total_cycles)
                 sam_cycles_46sd <- vector(mode="numeric", length=total_cycles)
                 sam_cycles_45sd <- vector(mode="numeric", length=total_cycles)
                 sam_cycles_44sd <- vector(mode="numeric", length=total_cycles)
@@ -422,60 +443,94 @@ if (length(new_session_paths)>0){
 
                 for (block_num in 1:dim(top_of_blocks)[1]){
                     if (block_num==1 && raw_data[top_of_blocks[block_num]+5,2]=="Bla"){
-                        bkgnd_49 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+0, (2:number_of_columns)]))
-                        bkgnd_49sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+0, (2:number_of_columns)]))
-                        bkgnd_48 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
-                        bkgnd_48sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
-                        bkgnd_47 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
-                        bkgnd_47sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
-                        bkgnd_46 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
-                        bkgnd_46sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
-                        bkgnd_45 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
-                        bkgnd_45sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
-                        bkgnd_44 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))
-                        bkgnd_44sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))
-
-                        offset <- 12
+                        if (analysis_type == 'clumped'){
+                            bkgnd_49 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+0, (2:number_of_columns)]))
+                            bkgnd_49sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+0, (2:number_of_columns)]))
+                            bkgnd_48 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            bkgnd_48sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            bkgnd_47 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
+                            bkgnd_47sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
+                            bkgnd_46 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
+                            bkgnd_46sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
+                            bkgnd_45 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
+                            bkgnd_45sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
+                            bkgnd_44 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))
+                            bkgnd_44sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))    
+                            offset <- 12
+                        } else {
+                            bkgnd_46 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+0, (2:number_of_columns)]))
+                            bkgnd_46sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+0, (2:number_of_columns)]))
+                            bkgnd_45 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            bkgnd_45sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            bkgnd_44 <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
+                            bkgnd_44sd <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))    
+                            offset <- 9
+                        }
                     }
+
                     # summarize cycles
                     for (i in 1:ncycles){
                         cycle_num <- i + cycle_num_offset
 
                         # average adjacent, in time, reference values - this is an effort to predict what the ref signal would be if it were measured exactly when the sample signal is measured
-                        wg_cycles_49[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1+14, (2:number_of_columns)]))))
-                        wg_cycles_49sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1+14, (2:number_of_columns)]))))
-                        wg_cycles_48[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2+14, (2:number_of_columns)]))))
-                        wg_cycles_48sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2+14, (2:number_of_columns)]))))
-                        wg_cycles_47[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3+14, (2:number_of_columns)]))))
-                        wg_cycles_47sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3+14, (2:number_of_columns)]))))
-                        wg_cycles_46[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4+14, (2:number_of_columns)]))))
-                        wg_cycles_46sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4+14, (2:number_of_columns)]))))
-                        wg_cycles_45[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5+14, (2:number_of_columns)]))))
-                        wg_cycles_45sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5+14, (2:number_of_columns)]))))
-                        wg_cycles_44[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6+14, (2:number_of_columns)]))))
-                        wg_cycles_44sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6+14, (2:number_of_columns)]))))
+                        if (analysis_type == 'clumped'){
+                            wg_cycles_49[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1+14, (2:number_of_columns)]))))
+                            wg_cycles_49sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1+14, (2:number_of_columns)]))))
+                            wg_cycles_48[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2+14, (2:number_of_columns)]))))
+                            wg_cycles_48sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2+14, (2:number_of_columns)]))))
+                            wg_cycles_47[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3+14, (2:number_of_columns)]))))
+                            wg_cycles_47sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3+14, (2:number_of_columns)]))))
+                            wg_cycles_46[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4+14, (2:number_of_columns)]))))
+                            wg_cycles_46sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4+14, (2:number_of_columns)]))))
+                            wg_cycles_45[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5+14, (2:number_of_columns)]))))
+                            wg_cycles_45sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5+14, (2:number_of_columns)]))))
+                            wg_cycles_44[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6+14, (2:number_of_columns)]))))
+                            wg_cycles_44sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6+14, (2:number_of_columns)]))))
+                            offset <- offset + 7
+                        } else {
+                            wg_cycles_46[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1+8, (2:number_of_columns)]))))
+                            wg_cycles_46sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1+8, (2:number_of_columns)]))))
+                            wg_cycles_45[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2+8, (2:number_of_columns)]))))
+                            wg_cycles_45sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2+8, (2:number_of_columns)]))))
+                            wg_cycles_44[cycle_num] <- mean(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3+8, (2:number_of_columns)]))))
+                            wg_cycles_44sd[cycle_num] <- sd(c(mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)])), mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3+8, (2:number_of_columns)]))))
+                            offset <- offset + 4
+                        }
 
-                        offset <- offset + 7
+                        if (analysis_type == 'clumped'){
+                            sam_cycles_49[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            sam_cycles_49sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            sam_cycles_48[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
+                            sam_cycles_48sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
+                            sam_cycles_47[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
+                            sam_cycles_47sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
+                            sam_cycles_46[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
+                            sam_cycles_46sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
+                            sam_cycles_45[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))
+                            sam_cycles_45sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))
+                            sam_cycles_44[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)]))
+                            sam_cycles_44sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)]))
 
-                        sam_cycles_49[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
-                        sam_cycles_49sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
-                        sam_cycles_48[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
-                        sam_cycles_48sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
-                        sam_cycles_47[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
-                        sam_cycles_47sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
-                        sam_cycles_46[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
-                        sam_cycles_46sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+4, (2:number_of_columns)]))
-                        sam_cycles_45[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))
-                        sam_cycles_45sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+5, (2:number_of_columns)]))
-                        sam_cycles_44[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)]))
-                        sam_cycles_44sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+6, (2:number_of_columns)]))
+                            offset <- offset + 7
+                        } else {
+                            sam_cycles_46[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            sam_cycles_46sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+1, (2:number_of_columns)]))
+                            sam_cycles_45[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
+                            sam_cycles_45sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+2, (2:number_of_columns)]))
+                            sam_cycles_44[cycle_num] <- mean(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
+                            sam_cycles_44sd[cycle_num] <- sd(as.numeric(raw_data[top_of_blocks[block_num]+offset+3, (2:number_of_columns)]))
 
-                        offset <- offset + 7
+                            offset <- offset + 4                            
+                        }
 
                         raw_i <- raw_i + ncycles
                     }
 
-                    offset <- 5
+                    if (analysis_type == 'clumped'){
+                        offset <- 5
+                    } else {
+                        offset <- 2
+                    }
                     cycle_num_offset <- cycle_num_offset + ncycles
                 
                 }
@@ -496,74 +551,21 @@ if (length(new_session_paths)>0){
                 R46wg_raw <- wg_cycles_46/wg_cycles_44
                 R46sam_raw <- sam_cycles_46/sam_cycles_44
 
-                R47wg_raw <- wg_cycles_47/wg_cycles_44
-                R47sam_raw <- sam_cycles_47/sam_cycles_44
+                if (analysis_type == 'clumped'){
+                    R47wg_raw <- wg_cycles_47/wg_cycles_44
+                    R47sam_raw <- sam_cycles_47/sam_cycles_44
 
-                R48wg_raw<- wg_cycles_48/wg_cycles_44
-                R48sam_raw <- sam_cycles_48/sam_cycles_44
+                    R48wg_raw<- wg_cycles_48/wg_cycles_44
+                    R48sam_raw <- sam_cycles_48/sam_cycles_44
 
-                R49wg_raw <- wg_cycles_49/wg_cycles_44
-                R49sam_raw <- sam_cycles_49/sam_cycles_44
+                    R49wg_raw <- wg_cycles_49/wg_cycles_44
+                    R49sam_raw <- sam_cycles_49/sam_cycles_44
+                }
 
                 # session specific corrections, so far only session_230629
                 if (session$name=='session_230629'){
 
-                    message(' ****  session_230629 has a custom correction that is being applied  **** ')
-
-                    # > ratio_and_delta_linear_model_coefficients_table
-                    # # A tibble: 16 × 3
-                    #    ratios           slopes      intercepts
-                    #    <chr>             <dbl>           <dbl>
-                    #  1 R45wg  -1.029512511e-8  1.327453432e-5
-                    #  2 R46wg  -3.290025813e-9  4.242159283e-6
-                    #  3 R47wg   3.352062309e-11 -4.322149142e-8
-                    #  4 R48wg   1.715730801e-11 -2.212263295e-8
-                    #  5 R45sam -7.323770533e-9  9.443269725e-6
-                    #  6 R46sam -1.003401217e-9  1.293785529e-6
-                    #  7 R47sam  9.376849151e-11 -1.209050929e-7
-                    #  8 R48sam  2.643220365e-11 -3.408168339e-8
-                    #  9 d45     2.540573526e-4 -3.275815504e-1
-                    # 10 d46     5.369710817e-4 -6.923705128e-1
-                    # 11 d47     1.229883721e-3 -1.585812070e+0
-                    # 12 d48     1.959316737e-3 -2.526343001e+0
-                    # 13 d13C    1.225447720e-5 -1.580092290e-2
-                    # 14 d18O    2.817259650e-5 -3.632574593e-2
-                    # 15 D47     6.042707953e-6 -7.791467634e-3
-                    # 16 D48     9.633916550e-5 -1.242197200e-1
-
-                    R45wg_predicted <- -1.029512511e-8 * as.numeric(sn) + 1.327453432e-5
-                    R46wg_predicted <- -3.290025813e-9 * as.numeric(sn) + 4.242159283e-6
-                    R47wg_predicted <-  3.352062309e-11 * as.numeric(sn) + -4.322149142e-8
-                    R48wg_predicted <-  1.715730801e-11 * as.numeric(sn) + -2.212263295e-8
-                    R45sam_predicted <- -7.323770533e-9 * as.numeric(sn) + 9.443269725e-6
-                    R46sam_predicted <- -1.003401217e-9 * as.numeric(sn) + 1.293785529e-6
-                    R47sam_predicted <-  9.376849151e-11 * as.numeric(sn) + -1.209050929e-7
-                    R48sam_predicted <-  2.643220365e-11 * as.numeric(sn) + -3.408168339e-8
-
-                    R45wg_corrected <- R45wg_raw - R45wg_predicted
-                    R46wg_corrected <- R46wg_raw - R46wg_predicted
-                    R47wg_corrected <- R47wg_raw - R47wg_predicted
-                    R48wg_corrected <- R48wg_raw - R48wg_predicted
-
-                    R45sam_corrected <- R45sam_raw - R45sam_predicted
-                    R46sam_corrected <- R46sam_raw - R46sam_predicted
-                    R47sam_corrected <- R47sam_raw - R47sam_predicted
-                    R48sam_corrected <- R48sam_raw - R48sam_predicted
-
-                    R45wg <- summarize(R45wg_corrected, NULL)
-                    R45sam <- summarize(R45sam_corrected, NULL)
-
-                    R46wg <- summarize(R46wg_corrected, NULL)
-                    R46sam <- summarize(R46sam_corrected, NULL)
-
-                    R47wg <- summarize(R47wg_corrected, NULL)
-                    R47sam <- summarize(R47sam_corrected, NULL)
-
-                    R48wg <- summarize(R48wg_corrected, NULL)
-                    R48sam <- summarize(R48sam_corrected, NULL)
-
-                    R49wg <- summarize(wg_cycles_49/wg_cycles_44, NULL)
-                    R49sam <- summarize(sam_cycles_49/sam_cycles_44, NULL)
+                    source(paste(project_dir, results_dir, session$name, 'psi_session_230629_CustomCorrection.R', sep="/"))
 
                 } else {
                     # Begin ratio and delta calculations
@@ -573,23 +575,27 @@ if (length(new_session_paths)>0){
                     R46wg <- summarize(R46wg_raw, NULL)
                     R46sam <- summarize(R46sam_raw, NULL)
 
-                    R47wg <- summarize(R47wg_raw, NULL)
-                    R47sam <- summarize(R47sam_raw, NULL)
+                    if (analysis_type == 'clumped'){
+                        R47wg <- summarize(R47wg_raw, NULL)
+                        R47sam <- summarize(R47sam_raw, NULL)
 
-                    R48wg <- summarize(R48wg_raw, NULL)
-                    R48sam <- summarize(R48sam_raw, NULL)
+                        R48wg <- summarize(R48wg_raw, NULL)
+                        R48sam <- summarize(R48sam_raw, NULL)
 
-                    R49wg <- summarize(wg_cycles_49/wg_cycles_44, NULL)
-                    R49sam <- summarize(sam_cycles_49/sam_cycles_44, NULL)
+                        R49wg <- summarize(wg_cycles_49/wg_cycles_44, NULL)
+                        R49sam <- summarize(sam_cycles_49/sam_cycles_44, NULL)
+                    }
                 }
 
                 # Sample ratios normalized to stochastic working gas            
                 R45sam_wg <- R45sam$data / R45wg$data * wg_R45sto
                 R46sam_wg <- R46sam$data / R46wg$data * wg_R46sto
-                R47sam_wg <- R47sam$data / R47wg$data * wg_R47sto
-                R48sam_wg <- R48sam$data / R48wg$data * wg_R48sto
-                R49sam_wg <- R49sam$data / R49wg$data * wg_R49sto
 
+                if (analysis_type == 'clumped'){
+                    R47sam_wg <- R47sam$data / R47wg$data * wg_R47sto
+                    R48sam_wg <- R48sam$data / R48wg$data * wg_R48sto
+                    R49sam_wg <- R49sam$data / R49wg$data * wg_R49sto
+                }
 
                 # Calculate atomic ratios
                 R13sam <- vector(mode="numeric", length=total_cycles)
@@ -605,10 +611,12 @@ if (length(new_session_paths)>0){
                 # stochastic sample gas
                 R45sam_sto <- R13sam + 2*R17sam
                 R46sam_sto <- 2*R18sam + 2*R13sam*R17sam + R17sam^2
-                R47sam_sto <- 2*R13sam*R18sam + 2*R17sam*R18sam + R13sam*R17sam^2
-                R48sam_sto <- R18sam^2 + 2*R13sam*R17sam*R18sam
-                R49sam_sto <- R13sam*R18sam^2
 
+                if (analysis_type == 'clumped'){
+                    R47sam_sto <- 2*R13sam*R18sam + 2*R17sam*R18sam + R13sam*R17sam^2
+                    R48sam_sto <- R18sam^2 + 2*R13sam*R17sam*R18sam
+                    R49sam_sto <- R13sam*R18sam^2
+                }
 
                 
                 # conduct an outlier test along the way 
@@ -617,20 +625,23 @@ if (length(new_session_paths)>0){
                 # molecular deltas
                 d45 <- summarize((R45sam$data / R45wg$data -1)*1000, nsigma)
                 d46 <- summarize((R46sam$data / R46wg$data -1)*1000, nsigma)
-                d47 <- summarize((R47sam$data / R47wg$data -1)*1000, nsigma)
-                d48 <- summarize((R48sam$data / R48wg$data -1)*1000, nsigma)
-                d49 <- summarize((R49sam$data / R49wg$data -1)*1000, nsigma)
+
+                if (analysis_type == 'clumped'){
+                    d47 <- summarize((R47sam$data / R47wg$data -1)*1000, nsigma)
+                    d48 <- summarize((R48sam$data / R48wg$data -1)*1000, nsigma)
+                    d49 <- summarize((R49sam$data / R49wg$data -1)*1000, nsigma)
                 
+                    # raw capital Deltas
+                    D45 <- summarize(((R45sam_wg/R45sam_sto)-1)*1000, nsigma)
+                    D46 <- summarize(((R46sam_wg/R46sam_sto)-1)*1000, nsigma)
+                    D47 <- summarize(((R47sam_wg/R47sam_sto)-1)*1000, nsigma)
+                    D48 <- summarize(((R48sam_wg/R48sam_sto)-1)*1000, nsigma)
+                    D49 <- summarize(((R49sam_wg/R49sam_sto)-1)*1000, nsigma)
+                }
+
                 # elemental deltas
                 d13C <- summarize((R13sam/vpdb_R13-1)*1000, nsigma)
                 d18O <- summarize((R18sam/vpdb_R18-1)*1000, nsigma)
-                            
-                # raw capital Deltas
-                D45 <- summarize(((R45sam_wg/R45sam_sto)-1)*1000, nsigma)
-                D46 <- summarize(((R46sam_wg/R46sam_sto)-1)*1000, nsigma)
-                D47 <- summarize(((R47sam_wg/R47sam_sto)-1)*1000, nsigma)
-                D48 <- summarize(((R48sam_wg/R48sam_sto)-1)*1000, nsigma)
-                D49 <- summarize(((R49sam_wg/R49sam_sto)-1)*1000, nsigma)
 
 
                 # Thresholds, Flagging, and Comments on each analysis
@@ -640,8 +651,11 @@ if (length(new_session_paths)>0){
                 residual_gas_flag <- FALSE
                 d13Csd_flag <- FALSE
                 d18Osd_flag <- FALSE
-                D47sd_flag <- FALSE
-                D48sd_flag <- FALSE
+
+                if (analysis_type == 'clumped'){
+                    D47sd_flag <- FALSE
+                    D48sd_flag <- FALSE
+                }
 
                 if (exists('reprocess')){
                     comment <- "reprocessed; "
@@ -681,14 +695,16 @@ if (length(new_session_paths)>0){
                     d18Osd_flag <- TRUE
                     comment <- paste(comment, "high d18O standard deviation", sep="; ")
                 }
-                if (D47$s > 0.2) {
-                    D47sd_flag <- TRUE
-                    comment <- paste(comment, "high D47 standard deviation", sep="; ")
-                    flag <- 0
-                }
-                if (D48$s > 1.0) {
-                    D48sd_flag <- TRUE
-                    comment <- paste(comment, "high D48 standard deviation", sep="; ")
+                if (analysis_type == 'clumped'){
+                    if (D47$s > 0.2) {
+                        D47sd_flag <- TRUE
+                        comment <- paste(comment, "high D47 standard deviation", sep="; ")
+                        flag <- 0
+                    }
+                    if (D48$s > 1.0) {
+                        D48sd_flag <- TRUE
+                        comment <- paste(comment, "high D48 standard deviation", sep="; ")
+                    }
                 }
 
                 if (exists('reprocess_all')){
@@ -696,6 +712,7 @@ if (length(new_session_paths)>0){
                 } else {
                     # Figures and Summary
                     lfs <- 1.4 # label font size
+
                     layout(matrix(c(1, 2, 3,
                                     4, 5, 6,
                                     7, 8, 9), nrow=3, ncol=3, byrow=TRUE))
@@ -725,17 +742,20 @@ if (length(new_session_paths)>0){
                          cex.lab=lfs)
                     points(d45$odi, d45$data[d45$odi], pch=8, col='red')
 
-                    plot(d47$data,
-                         xlab="Cycle Number",
-                         ylab="d47 (permil)",
-                         cex.lab=lfs)
-                    points(d47$odi, d47$data[d47$odi], pch=8, col='red')
-                    
-                    plot(d48$data,
-                         xlab="Cycle Number",
-                         ylab="d48 (permil)",
-                         cex.lab=lfs)
-                    points(d48$odi, d48$data[d48$odi], pch=8, col='red')
+                    if (analysis_type == 'clumped'){
+                        plot(d47$data,
+                             xlab="Cycle Number",
+                             ylab="d47 (permil)",
+                             cex.lab=lfs)
+                        points(d47$odi, d47$data[d47$odi], pch=8, col='red')
+                        
+                        plot(d48$data,
+                             xlab="Cycle Number",
+                             ylab="d48 (permil)",
+                             cex.lab=lfs)
+                        points(d48$odi, d48$data[d48$odi], pch=8, col='red')
+                    }
+
                     
                     plot(d46$data,
                          xlab="Cycle Number",
@@ -743,17 +763,19 @@ if (length(new_session_paths)>0){
                          cex.lab=lfs)
                     points(d46$odi, d46$data[d46$odi], pch=8, col='red')
                     
-                    plot(D47$data,
-                         xlab="Cycle Number",
-                         ylab="D47 (permil)",
-                         cex.lab=lfs)
-                    points(D47$odi, D47$data[D47$odi], pch=8, col='red')
-                    
-                    plot(D48$data,
-                         xlab="Cycle Number",
-                         ylab="D48 (permil)",
-                         cex.lab=lfs)
-                    points(D48$odi, D48$data[D48$odi], pch=8, col='red')
+                    if (analysis_type == 'clumped'){
+                        plot(D47$data,
+                             xlab="Cycle Number",
+                             ylab="D47 (permil)",
+                             cex.lab=lfs)
+                        points(D47$odi, D47$data[D47$odi], pch=8, col='red')
+                        
+                        plot(D48$data,
+                             xlab="Cycle Number",
+                             ylab="D48 (permil)",
+                             cex.lab=lfs)
+                        points(D48$odi, D48$data[D48$odi], pch=8, col='red')
+                    }
                     
                     message("            Analysis time: ", analysis_string_time)
                     message("            Residual Gas: ", round(as.numeric(residual_gas), 5), " mbar", if (residual_gas_flag){"    ** UPDATED !! - FLAGGED WITH HIGH RESIDUAL GAS **"})
@@ -765,44 +787,68 @@ if (length(new_session_paths)>0){
                     message("            Variance estimates: ")
                     message("                ",paste("d","45 sd",sep=''),": ", round(d45$s, 4), " \u2030", if (length(d45$pdi)<total_cycles){paste("    ** ", length(d45$odi)," outlier(s) **")})
                     message("                ",paste("d","46 sd",sep=''),": ", round(d46$s, 4), " \u2030", if (length(d46$pdi)<total_cycles){paste("    ** ", length(d46$odi)," outlier(s) **")})
-                    message("                ",paste("d","47 sd",sep=''),": ", round(d47$s, 4), " \u2030", if (length(d47$pdi)<total_cycles){paste("    ** ", length(d47$odi)," outlier(s) **")})
-                    message("                ",paste("d","48 sd",sep=''),": ", round(d48$s, 4), " \u2030", if (length(d48$pdi)<total_cycles){paste("    ** ", length(d48$odi)," outlier(s) **")})
-                    message("                ",paste("D","47 sd",sep=''),": ", round(D47$s, 4), " \u2030", if (length(D47$pdi)<total_cycles){paste("    ** ", length(D47$odi)," outlier(s) **")})
-                    message("                ",paste("D","48 sd",sep=''),": ", round(D48$s, 4), " \u2030", if (length(D48$pdi)<total_cycles){paste("    ** ", length(D48$odi)," outlier(s) **")})
+                    if (analysis_type == 'clumped'){
+                        message("                ",paste("d","47 sd",sep=''),": ", round(d47$s, 4), " \u2030", if (length(d47$pdi)<total_cycles){paste("    ** ", length(d47$odi)," outlier(s) **")})
+                        message("                ",paste("d","48 sd",sep=''),": ", round(d48$s, 4), " \u2030", if (length(d48$pdi)<total_cycles){paste("    ** ", length(d48$odi)," outlier(s) **")})
+                        message("                ",paste("D","47 sd",sep=''),": ", round(D47$s, 4), " \u2030", if (length(D47$pdi)<total_cycles){paste("    ** ", length(D47$odi)," outlier(s) **")})
+                        message("                ",paste("D","48 sd",sep=''),": ", round(D48$s, 4), " \u2030", if (length(D48$pdi)<total_cycles){paste("    ** ", length(D48$odi)," outlier(s) **")})
+                    }
                     message("            Finally, data I care about :) ")
                     message("                ",paste("d","13C",sep=''),": ", round(d13C$m, 3), " \u2030", if(d13Csd_flag){"    ** HIGH STANDARD DEVIATION **"})
                     message("                ",paste("d","18O",sep=''),": ", round(d18O$m, 3), " \u2030", if(d18Osd_flag){"    ** HIGH STANDARD DEVIATION **"})
-                    message("                ",paste("D","47",sep=''),": ", round(D47$m, 3), " \u2030", if(D47sd_flag){"    ** HIGH STANDARD DEVIATION **"})
-                    message("                ",paste("D","48",sep=''),": ", round(D48$m, 3), " \u2030", if(D48sd_flag){"    ** HIGH STANDARD DEVIATION **"})
+                    if (analysis_type == 'clumped'){
+                        message("                ",paste("D","47",sep=''),": ", round(D47$m, 3), " \u2030", if(D47sd_flag){"    ** HIGH STANDARD DEVIATION **"})
+                        message("                ",paste("D","48",sep=''),": ", round(D48$m, 3), " \u2030", if(D48sd_flag){"    ** HIGH STANDARD DEVIATION **"})
+                    }
                     comment <- paste(comment, readline(prompt="            Enter comments and/or press [enter]: "), sep="; ")
                     comment <- gsub(",", ";", comment)
                 }
 
                 
     #           output headers and data
-                samplelog_output <- c(sn, as.character(analysis_string_time), sample_name, sample_type, flag, comment,
-                                       d13C$m, d13C$s, d13C$n, d13C$slope, d13C$R2, d13C$P,
-                                       d18O$m, d18O$s, d18O$n, d18O$slope, d18O$R2, d18O$P,
-                                       d45$m, d45$s, d45$n, d45$slope, d45$R2, d45$P,
-                                       d46$m, d46$s, d46$n, d46$slope, d46$R2, d46$P,
-                                       d47$m, d47$s, d47$n, d47$slope, d47$R2, d47$P,
-                                       D47$m, D47$s, D47$n, D47$slope, D47$R2, D47$P,
-                                       d48$m, d48$s, d48$n, d48$slope, d48$R2, d48$P,
-                                       D48$m, D48$s, D48$n, D48$slope, D48$R2, D48$P,
-                                       d49$m, d49$s, d49$n, d49$slope, d49$R2, d49$P,
-                                       D49$m, D49$s, D49$n, D49$slope, D49$R2, D49$P,
-                                       R45sam$m, R45sam$s, R45wg$m, R45wg$s, mean(R45sam_wg), 
-                                       R46sam$m, R46sam$s, R46wg$m, R46wg$s, mean(R46sam_wg),
-                                       R47sam$m, R47sam$s, R47wg$m, R47wg$s, mean(R47sam_wg),
-                                       R48sam$m, R48sam$s, R48wg$m, R48wg$s, mean(R48sam_wg),
-                                       R49sam$m, R49sam$s, R49wg$m, R49wg$s, mean(R49sam_wg),
-                                       bkgnd_44, bkgnd_45, bkgnd_46, bkgnd_47, bkgnd_48, bkgnd_49,
-                                       analysis_unix_time, batch_name, nu_software_version, psi_R_version, 
-                                       sample_mass, sample_pressure, as.numeric(sample_pressure)/as.numeric(sample_mass), residual_gas, nchops, min_ref_beam, max_ref_beam,
-                                       nblocks, total_cycles,
-                                       initial_sample_beam, pre_balance_sample_beam, nu_balance,
-                                       max(sam_cycles_44), mean(sam_cycles_44), min(sam_cycles_44), max(sam_cycles_47), mean(sam_cycles_47), min(sam_cycles_47),
-                                       min(balance), mean(balance), max(balance), sam_initial_decay, wg_initial_decay)
+                if (analysis_type == 'clumped'){
+
+                    samplelog_headers <- samplelog_headers_clumped
+
+                    samplelog_output <- c(sn, as.character(analysis_string_time), sample_name, sample_type, flag, comment,
+                                           d13C$m, d13C$s, d13C$n, d13C$slope, d13C$R2, d13C$P,
+                                           d18O$m, d18O$s, d18O$n, d18O$slope, d18O$R2, d18O$P,
+                                           d45$m, d45$s, d45$n, d45$slope, d45$R2, d45$P,
+                                           d46$m, d46$s, d46$n, d46$slope, d46$R2, d46$P,
+                                           d47$m, d47$s, d47$n, d47$slope, d47$R2, d47$P,
+                                           D47$m, D47$s, D47$n, D47$slope, D47$R2, D47$P,
+                                           d48$m, d48$s, d48$n, d48$slope, d48$R2, d48$P,
+                                           D48$m, D48$s, D48$n, D48$slope, D48$R2, D48$P,
+                                           d49$m, d49$s, d49$n, d49$slope, d49$R2, d49$P,
+                                           D49$m, D49$s, D49$n, D49$slope, D49$R2, D49$P,
+                                           R45sam$m, R45sam$s, R45wg$m, R45wg$s, mean(R45sam_wg), 
+                                           R46sam$m, R46sam$s, R46wg$m, R46wg$s, mean(R46sam_wg),
+                                           R47sam$m, R47sam$s, R47wg$m, R47wg$s, mean(R47sam_wg),
+                                           R48sam$m, R48sam$s, R48wg$m, R48wg$s, mean(R48sam_wg),
+                                           R49sam$m, R49sam$s, R49wg$m, R49wg$s, mean(R49sam_wg),
+                                           bkgnd_44, bkgnd_45, bkgnd_46, bkgnd_47, bkgnd_48, bkgnd_49,
+                                           analysis_unix_time, batch_name, nu_software_version, psi_R_version, 
+                                           sample_mass, sample_pressure, as.numeric(sample_pressure)/as.numeric(sample_mass), residual_gas, nchops, min_ref_beam, max_ref_beam,
+                                           nblocks, total_cycles,
+                                           initial_sample_beam, pre_balance_sample_beam, nu_balance,
+                                           max(sam_cycles_44), mean(sam_cycles_44), min(sam_cycles_44), max(sam_cycles_47), mean(sam_cycles_47), min(sam_cycles_47),
+                                           min(balance), mean(balance), max(balance), sam_initial_decay, wg_initial_decay)
+                } else {
+                    samplelog_headers <- samplelog_headers_bulk
+                    samplelog_output <- c(sn, as.character(analysis_string_time), sample_name, sample_type, flag, comment,
+                                           d13C$m, d13C$s, d13C$n, d13C$slope, d13C$R2, d13C$P,
+                                           d18O$m, d18O$s, d18O$n, d18O$slope, d18O$R2, d18O$P,
+                                           d45$m, d45$s, d45$n, d45$slope, d45$R2, d45$P,
+                                           d46$m, d46$s, d46$n, d46$slope, d46$R2, d46$P,
+                                           R45sam$m, R45sam$s, R45wg$m, R45wg$s, mean(R45sam_wg), 
+                                           R46sam$m, R46sam$s, R46wg$m, R46wg$s, mean(R46sam_wg),
+                                           analysis_unix_time, batch_name, nu_software_version, psi_R_version, 
+                                           sample_mass, sample_pressure, as.numeric(sample_pressure)/as.numeric(sample_mass), residual_gas, nchops, min_ref_beam, max_ref_beam,
+                                           nblocks, total_cycles,
+                                           initial_sample_beam, pre_balance_sample_beam, nu_balance,
+                                           max(sam_cycles_44), mean(sam_cycles_44), min(sam_cycles_44),
+                                           min(balance), mean(balance), max(balance), sam_initial_decay, wg_initial_decay)
+                }
 
                 if (file.exists(session$samplelog) == FALSE) {
                     write(samplelog_headers, session$samplelog, ncolumns=length(samplelog_headers), sep=",", append=TRUE)
@@ -816,22 +862,35 @@ if (length(new_session_paths)>0){
 
 
             if (exists('ncycles')){
-                # save all high res data into single data frame
-                all_cycles <- data.frame(c(1:ncycles), wg_cycles_44, sam_cycles_44, wg_cycles_45, sam_cycles_45, wg_cycles_46, sam_cycles_46,
-                                         wg_cycles_47, sam_cycles_47, wg_cycles_48, sam_cycles_48, wg_cycles_44sd, sam_cycles_44sd,
-                                         wg_cycles_45sd, sam_cycles_45sd, wg_cycles_46sd, sam_cycles_46sd, wg_cycles_47sd, sam_cycles_47sd,
-                                         wg_cycles_48sd, sam_cycles_48sd, R45wg$data, R45sam$data, R46wg$data, R46sam$data, R47wg$data,
-                                         R47sam$data, R48wg$data, R48sam$data, d45$data, d46$data, d47$data, d48$data, d13C$data, d18O$data,
-                                         D47$data, D48$data, d45$data - d45$m, d46$data - d46$m, d47$data - d47$m, d48$data - d48$m,
-                                         d13C$data - d13C$m, d18O$data - d18O$m, D47$data - D47$m, D48$data - D48$m)
 
-                all_cycles_column_names <- c('cycle', 'wg_cycles_44', 'sam_cycles_44', 'wg_cycles_45', 'sam_cycles_45', 'wg_cycles_46', 'sam_cycles_46',
-                                         'wg_cycles_47', 'sam_cycles_47', 'wg_cycles_48', 'sam_cycles_48', 'wg_cycles_44sd', 'sam_cycles_44sd',
-                                         'wg_cycles_45sd', 'sam_cycles_45sd', 'wg_cycles_46sd', 'sam_cycles_46sd', 'wg_cycles_47sd', 'sam_cycles_47sd',
-                                         'wg_cycles_48sd', 'sam_cycles_48sd', 'R45wg', 'R45sam', 'R46wg', 'R46sam', 'R47wg',
-                                         'R47sam', 'R48wg', 'R48sam', 'd45', 'd46', 'd47', 'd48', 'd13C', 'd18O',
-                                         'D47', 'D48', 'd45residual', 'd46residual', 'd47residual', 'd48residual',
-                                         'd13Cresidual', 'd18Oresidual', 'D47residual', 'D48residual')
+                # save all high res data into single data frame
+                if (analysis_type == 'clumped'){
+                    all_cycles <- data.frame(c(1:ncycles), wg_cycles_44, sam_cycles_44, wg_cycles_45, sam_cycles_45, wg_cycles_46, sam_cycles_46,
+                                             wg_cycles_47, sam_cycles_47, wg_cycles_48, sam_cycles_48, wg_cycles_44sd, sam_cycles_44sd,
+                                             wg_cycles_45sd, sam_cycles_45sd, wg_cycles_46sd, sam_cycles_46sd, wg_cycles_47sd, sam_cycles_47sd,
+                                             wg_cycles_48sd, sam_cycles_48sd, R45wg$data, R45sam$data, R46wg$data, R46sam$data, R47wg$data,
+                                             R47sam$data, R48wg$data, R48sam$data, d45$data, d46$data, d47$data, d48$data, d13C$data, d18O$data,
+                                             D47$data, D48$data, d45$data - d45$m, d46$data - d46$m, d47$data - d47$m, d48$data - d48$m,
+                                             d13C$data - d13C$m, d18O$data - d18O$m, D47$data - D47$m, D48$data - D48$m)
+
+                    all_cycles_column_names <- c('cycle', 'wg_cycles_44', 'sam_cycles_44', 'wg_cycles_45', 'sam_cycles_45', 'wg_cycles_46', 'sam_cycles_46',
+                                             'wg_cycles_47', 'sam_cycles_47', 'wg_cycles_48', 'sam_cycles_48', 'wg_cycles_44sd', 'sam_cycles_44sd',
+                                             'wg_cycles_45sd', 'sam_cycles_45sd', 'wg_cycles_46sd', 'sam_cycles_46sd', 'wg_cycles_47sd', 'sam_cycles_47sd',
+                                             'wg_cycles_48sd', 'sam_cycles_48sd', 'R45wg', 'R45sam', 'R46wg', 'R46sam', 'R47wg',
+                                             'R47sam', 'R48wg', 'R48sam', 'd45', 'd46', 'd47', 'd48', 'd13C', 'd18O',
+                                             'D47', 'D48', 'd45residual', 'd46residual', 'd47residual', 'd48residual',
+                                             'd13Cresidual', 'd18Oresidual', 'D47residual', 'D48residual')
+                } else {
+                    all_cycles <- data.frame(c(1:ncycles), wg_cycles_44, sam_cycles_44, wg_cycles_45, sam_cycles_45, wg_cycles_46, sam_cycles_46,
+                                             wg_cycles_44sd, sam_cycles_44sd, wg_cycles_45sd, sam_cycles_45sd, wg_cycles_46sd, sam_cycles_46sd,
+                                             R45wg$data, R45sam$data, R46wg$data, R46sam$data, d45$data, d46$data, d13C$data, d18O$data,
+                                             d45$data - d45$m, d46$data - d46$m, d13C$data - d13C$m, d18O$data - d18O$m)
+
+                    all_cycles_column_names <- c('cycle', 'wg_cycles_44', 'sam_cycles_44', 'wg_cycles_45', 'sam_cycles_45', 'wg_cycles_46', 'sam_cycles_46',
+                                             'wg_cycles_44sd', 'sam_cycles_44sd', 'wg_cycles_45sd', 'sam_cycles_45sd', 'wg_cycles_46sd', 'sam_cycles_46sd',
+                                             'R45wg', 'R45sam', 'R46wg', 'R46sam', 'd45', 'd46', 'd13C', 'd18O', 'd45residual', 'd46residual', 'd13Cresidual',
+                                             'd18Oresidual')
+                }
                 colnames(all_cycles) <- all_cycles_column_names
 
                 psi_all_cycles_file <- paste(project_dir, results_dir, session$name, paste("psi_", session$name, "_all_cycles.hdf5", sep=""), sep="/")
