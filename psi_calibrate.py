@@ -1,5 +1,6 @@
 """
-This script is really just dressing for M. Daeron's D47crunch carbonate clumped isotope python library.
+This script started out as dressing for M. Daeron's D47crunch carbonate clumped isotope python library. As of version
+1.0, I am trying to have it write a proper report in addition to making full use of D47crunch.
 
 Version 0.1 - 2023.05.26 => created
 Version 0.5 - 2023.06.02 => now we can set a samples flag to 0 (ignore or exclude) in the raw data file and pass
@@ -7,90 +8,38 @@ Version 0.5 - 2023.06.02 => now we can set a samples flag to 0 (ignore or exclud
 Version 0.6 - 2024.02.06 => this script is now called from psi_calibrate.Rmd, an Rmarkdown that oversees the calibration
     of psi data followed by creation of a report.
 Version 0.7 - 2024.04.30 => created way to choose a sample log file to process after dividing sessions into chop2 and chop3
+Version 1.0 - 2024.05.31 => started creating proper report
 """
 
 __author__ = "Andy Schauer"
 __email__ = "aschauer@uw.edu"
-__last_modified__ = "2024-04-30"
-__version__ = "0.7"
+__last_modified__ = "2024-05-31"
+__version__ = "1.0"
 __copyright__ = "Copyright 2024, Andy Schauer"
 __license__ = "Apache 2.0"
-__acknowledgements__ = "K. Huntington, E. Heitmann, S. Mat, Vigash. Special thanks to M. Daeron for D47crunch!"
+__acknowledgements__ = "K. Huntington, E. Heitmann, S. Mat, V. Ravi, M. Leite. Special thanks to M. Daeron for D47crunch!"
 
 
 
 # -------------------- Imports --------------------
 import csv
 from D47crunch import *
-import lab
+import isolab_lib
 import matplotlib.pyplot as pplt
 from natsort import natsorted
 import os
 import shutil
+import webbrowser
+
 
 
 # -------------------- Functions --------------------
-def get_path(desired_path):
-    """Make your life easier with this section. These are the paths that seem to change depending on the computer we are working on."""
-    psi_path_file = os.path.join(os.getcwd(), 'psi_path.txt')
-    if os.path.isfile(psi_path_file):
-        # print(' :-) Using existing psi path file for a warm and fuzzy experience. (-:')
-        with open(psi_path_file, 'r') as ppf:
-            home, python_path, project_path, standards_path = ppf.readline().split(',')
-            python_path = home + python_path
-            project_path = home + project_path
-            standards_path = home + standards_path
-
-    else:
-        python_path_check = False
-        project_path_check = False
-        standards_path_check = False
-        print(' )-: Picarro path file does not exist yet. :-(')
-        print(" Let's make one... :-| ")
-        while python_path_check is False:
-            python_path = input(f'Enter the current path to the psi python scripts. Perhaps it is {os.getcwd()}. ')
-            if os.path.isdir(python_path):
-                python_path_check = True
-                if python_path[-1] != '/':
-                    python_path += '/'
-            else:
-                print(f'oops, try typing that in again (you typed {python_path}): ')
-
-        while project_path_check is False:
-            project_path = input('Enter the current path to your projects: ')
-            if os.path.isdir(project_path):
-                project_path_check = True
-                if project_path[-1] != '/':
-                    project_path += '/'
-            else:
-                print(f'oops, try typing that in again (you typed {project_path}): ')
-
-        while standards_path_check is False:
-            standards_path = input('Enter the current path and filename to your reference materials file: ')
-            if os.path.isfile(standards_path):
-                standards_path_check = True
-            else:
-                print(f'oops, try typing that in again (you typed {standards_path}): ')
-
-        with open(psi_path_file, 'w') as ppf:
-            ppf.write(f'{python_path},{project_path},{standards_path}')
-
-    if desired_path == "project":
-        return project_path
-    elif desired_path == "python":
-        return python_path
-    elif desired_path == "standards":
-        return standards_path
-    else:
-        unknown_path = input('Enter the path to your project: ')
-        return unknown_path
 
 
 
-# -------------------- paths --------------------
-project_path = get_path("project")
 
 # ---------- Identify session to be loaded ----------
+project_path = isolab_lib.get_path("psi", "project")
 session_list = natsorted(os.listdir(project_path))
 print('\nChoose a session from the list below:')
 [print(f'    {i}') for i in session_list]
@@ -124,7 +73,8 @@ while identified_session_file == 0:
         print('\n** More than one session file found. **\n')
 
 D47crunch_input_file = f"psi_{session}_D47crunch_input.csv"
-D47crunch_output_file = f"{session}_D47crunch_output.csv"
+D47crunch_output_analyses_file = f"{session}_D47crunch_output_all_analyses.csv"
+D47crunch_output_samples_file = f"{session}_D47crunch_output_summarized.csv"
 psi_calibrated_session_file = f"psi_{session}_calibrated.csv"
 
 
@@ -169,20 +119,27 @@ psi48.standardize()
 psi47.summary(verbose=True)
 psi48.summary(verbose=True)
 
-table_of_samples(psi47, psi48)
+table_of_samples(data47 = psi47,
+                  data48 = psi48,
+                  dir = f"{session_path}",
+                  filename = D47crunch_output_samples_file,
+                  save_to_file = True,
+                  print_out = True,
+                  output = None)
+
 
 table_of_analyses(data47 = psi47,
                   data48 = psi48,
                   dir = f"{session_path}",
-                  filename = D47crunch_output_file,
+                  filename = D47crunch_output_analyses_file,
                   save_to_file = True,
                   print_out = False,
                   output = None)
 
 
 # -------------------- combine Psi meta data with D47crunch output data --------------------
-h1, d1 = lab.read_file(os.path.join(session_path, D47crunch_input_file), ',')
-h2, d2 = lab.read_file(os.path.join(session_path, D47crunch_output_file), ',')
+h1, d1 = isolab_lib.read_file(os.path.join(session_path, D47crunch_input_file), ',')
+h2, d2 = isolab_lib.read_file(os.path.join(session_path, D47crunch_output_analyses_file), ',')
 
 d3 = {**d1, **d2}
 h3=list(d3.keys())
@@ -229,7 +186,7 @@ psi48.plot_sessions(dir=f"{report_path}figures/")
 
 # ------------------ read in final calibrated file for interactive plotting etc -------------------------------
 
-headers, data = lab.read_file(os.path.join(session_path, psi_calibrated_session_file), ',')
+headers, data = isolab_lib.read_file(os.path.join(session_path, psi_calibrated_session_file), ',')
 
 original_data = data.copy()
 flag0_indices = [i for i, e in enumerate(data['flag']) if int(e) == 0]
@@ -256,4 +213,160 @@ for i in numlist:
 
 for i in strlist:
     globals()[i] = np.asarray(data[i])
+
+
+
+report_page = os.path.join(session_path, f'{session}_calibration_summary.html')
+
+
+# ---------- REPORT BITS ---------- 
+print('Making html page...')
+header = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <!-- py by Andrew Schauer -->
+        <meta http-equiv="Content-Type" content="text/html charset=UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <link rel="stylesheet" type="text/css" href="py_report_style.css">
+        <title>Psi Calibration Report</title>
+    </head>"""
+
+calculation_notes_block = "<li>magic</li>"
+refmat_block = "<tr><td>wand</td><td>potions</td><td></td><td></td><td></td><td></td><td></td></tr>"
+data_quality_block = "<tr><td>OWLS</td></tr>"
+# calculation_notes_block = str([f"<li>{i}</li>" for i in calculation_notes]).replace("[", "").replace("'", "").replace("]", "").replace(", ", "")
+# refmat_block = str([f"<tr><td>{eval(i)['names'][0]}</td><td>{eval(i)['material']}</td><td>{eval(i)['d15N']}</td><td>{eval(i)['fractionN']}</td><td>{eval(i)['d13C']}</td><td>{eval(i)['fractionC']}</td><td>{eval(i)['purpose']}</td></tr>" for i in included_isotope_standards]).replace("[", "").replace("'", "").replace("]", "").replace(", ", "")
+# data_quality_block = f"""<tr><td>&delta;<sup>15</sup>N</td><td>{np.round(np.std(d15N_AirN2[eval(d15N_std_3)['index']])*2,3)} &permil;</td><td>{np.round(np.mean(d15N_AirN2[eval(d15N_std_3)['index']]) - eval(d15N_std_3)['d15N'], 3)} &permil;</td><td>{d15N_std_3}</td></tr>
+                         # <tr><td>&delta;<sup>13</sup>C</td><td>{np.round(np.std(d13C_VPDB[eval(d13C_std_3)['index']])*2,3)} &permil;</td><td>{np.round(np.mean(d13C_VPDB[eval(d13C_std_3)['index']]) - eval(d13C_std_3)['d13C'],3)} &permil;</td><td>{d13C_std_3}</td></tr>
+                         # <tr><td><br></td><td> </td><td> </td><td> </td></tr>
+                         # <tr><td>&delta;<sup>15</sup>N</td><td>{np.round(d15N_AirN2_residual_std*2, 3)} &permil;</td><td> </td><td>all isotope reference materials</td></tr>
+                         # <tr><td>&delta;<sup>13</sup>C</td><td>{np.round(d13C_VPDB_residual_std*2, 3)} &permil;</td><td> </td><td>all isotope reference materials</td></tr>
+                         # <tr><td>N quantity</td>
+                         #     <td>{np.round(np.nanstd(np.hstack([Nqty[GA1['index']] - GA1['fractionN']*Amount[GA1['index']], Nqty[GA2['index']] - GA2['fractionN']*Amount[GA2['index']], Nqty[SA['index']] - SA['fractionN']*Amount[SA['index']]])*1000)*2, 1)} &micro;g</td>
+                         #     <td>{np.round(np.nanmean(np.hstack([Nqty[GA1['index']] - GA1['fractionN']*Amount[GA1['index']], Nqty[GA2['index']] - GA2['fractionN']*Amount[GA2['index']], Nqty[SA['index']] - SA['fractionN']*Amount[SA['index']]]))*1000, 1)} &micro;g</td>
+                         #     <td>all isotope reference materials</td></tr>
+                         # <tr><td>C quantity</td>
+                         #     <td>{np.round(np.nanstd(np.hstack([Cqty[GA1['index']] - GA1['fractionC']*Amount[GA1['index']], Cqty[GA2['index']] - GA2['fractionC']*Amount[GA2['index']], Cqty[SA['index']] - SA['fractionC']*Amount[SA['index']]])*1000)*2, 1)} &micro;g</td>
+                         #     <td>{np.round(np.nanmean(np.hstack([Cqty[GA1['index']] - GA1['fractionC']*Amount[GA1['index']], Cqty[GA2['index']] - GA2['fractionC']*Amount[GA2['index']], Cqty[SA['index']] - SA['fractionC']*Amount[SA['index']]]))*1000, 1)} &micro;g</td>
+                         #     <td>all isotope reference materials</td></tr>"""
+
+body = f"""
+    <body>
+    <div class="entire_page">
+    <h2>Psi Calibration Report</h2>
+    <div class="created-date">Created - {str(dt.datetime.now())}</div>
+    <h2>Introduction</h2>
+    <div class="text-indent">
+        <p>This report is meant to be a stand-alone collection of methods,
+        data, scripts, and notes related to calibration of carbonate clumped
+        isotope data generated with Psi a Nu Perspective / NuCarb isotope
+        ratio mass spectrometer / automated carbonate digestion system.
+        You can read more about our implementation of this method on our website
+        <a href="https://isolab.ess.washington.edu/laboratory/carbonate-D47.php">
+        https://isolab.ess.washington.edu/laboratory/carbonate-D47.php</a>.</p>
+
+        <p>The data and python scripts used to generate this page are linked
+        and described in the <a href="#refs">References</a> section below. If you wish
+        to save this report, <a href="report.zip">save the zip file</a> or copy and paste
+        or download the entire 'report' directory to a place of your choosing and all
+        html, images, data files, and python scripts will be saved. <strong>
+        &iexcl; <a href="report.zip">Save a copy if you are finished analyzing your samples</a> !</strong></p>
+    </div>
+
+    <h2>My data</h2>
+    <div class="text-indent">
+        <p>This technical stuff is fine and all but where are <strong><a href="data/{psi_calibrated_session_file}">my data</a></strong>?
+        This calibrated data file contains sample IDs, dates of analyses, unique analysis numbers, total mass weighed for analysis,
+        blah blah and blah. Each section of data is separated
+        by an empty row. The first section of data are the trusted reference materials; the second section of data are trusted samples;
+        the third section of data are untrusted. Under the "trust" heading, "1" indicates good, trusted data while "0" indicates poor
+        quality data that should probably be distrusted. Up to you if you want to use it. Untrusted data are given the reason for
+        distrust. <strong>&iexcl; <a href="report.zip">If you are done analyzing samples, save a copy of the entire report directory elsewhere,
+        not just a copy of your data file</a> !</strong></p>
+    </div>
+
+    <h2>Data operations</h2>
+    <div class="text-indent">
+        <p>A suite of mathmatical operations were completed on these data prior to claiming they are final. Here are notes associated with
+        these calculations:
+        <ul>
+        {calculation_notes_block}
+        </ul>
+        </p>
+    </div>
+
+    <h2>Run inventory</h2>
+    <div class="text-indent">
+        <table>
+            <tr><td>Total number of analyses in session</td><td>{len(set(UID))}</td></tr>
+            <tr><td>Total number of standards in session</td><td>Nothing but standards</td></tr>
+            <tr><td>Total number of samples in run</td><td>0</td></tr>
+            <tr><td><br></td></tr>
+            <tr><td>Number of <a href="#distrusted">distrusted analyses in session</a></td><td>0</td></tr>
+        </table>
+    </div>
+
+    <h2>Reference materials</h2>
+    <div class="text-indent">
+        <p>describe Bernasconi et al. 2021, Fiebig for GU1</p>
+        <table>
+            <tr><th>Reference<br>name</th><th>Reference<br>material</th><th>d13C<br>accepted<br>(permil)</th><th>d18O<br>accepted<br>(permil)</th><th>D47</th><th>D48</th><th>Purpose</th></tr>
+            {refmat_block}
+        </table>
+    </div>
+
+    <h2>Data quality</h2>
+    <div class="text-indent"><p>Top quality of course.</p>
+        <table>
+            <tr><th>Parameter</th><th>Precision</th><th>Accuracy</th><th>Reference<br>Material(s)<br>Used</th></tr>
+            {data_quality_block}
+        </table><br>
+    </div>
+
+    <h2>Figures</h2>"""
+
+figure_block = '<div class="clear-both"><img src="/home/aschauer/projects/psi/Results/session_240409/report/figures/D47_plot_mySession.png"><hr></div>'
+
+# python_scripts_block = str([f'<li><a href="python/{key}_REPORT_COPY">{key}</a> - {value}</li>' for key, value in python_scripts.items()]).replace("[", "").replace("'", "").replace("]", "").replace(", ", "")
+python_scripts_block = 'python scripts here'
+
+footer = f"""
+    <h2 id="refs">References</h2>
+    <div class="references">
+    <ul>
+        <li>Python scripts - modification date:
+            <ul>
+                {python_scripts_block}
+            </ul>
+        <li></li>
+        <li><a href="https://github.com/andyschauer/shrekCN">github repository</a></li>
+        <li>Data files - <a href="data/{psi_calibrated_session_file}">{psi_calibrated_session_file}</a></li>
+        <li><a href="https://isolab.ess.washington.edu/laboratory/solid-CN.php">IsoLab's carbon and nitrogen analysis overiew.</a></li>
+        <li><a href="https://isolab.ess.washington.edu/SOPs/shrek-cn.php">IsoLab's water carbon and nitrogen analysis method.</a></li>
+        <li><a href="report.zip">Zip file of entire report directory.</a></strong>.</li>
+    </ul>
+    </div>
+    </body></div></html>"""
+
+
+
+# -------------------- WRITE REPORT --------------------
+with open(report_page, 'w') as report:
+    report.write(header)
+    report.write(body)
+    report.write(figure_block)
+    # [report.write(i) for i in figure_block]
+    report.write(footer)
+    report.close()
+webbrowser.open(report_page)
+
+
+
+# -------------------- REPORT ZIP --------------------
+shutil.make_archive('report', 'zip', session_path)
+shutil.move('report.zip', os.path.join(session_path, 'report.zip'))
+
+
+
 
