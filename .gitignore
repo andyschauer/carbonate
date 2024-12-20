@@ -1,3 +1,8 @@
+.gitignore
 psi_path.txt
+psi_path_R.txt
 __pycache__
 output
+archive
+.RData
+.Rhistory
