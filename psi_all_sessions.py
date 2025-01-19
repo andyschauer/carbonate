@@ -9,7 +9,7 @@ __author__ = "Andy Schauer"
 __email__ = "aschauer@uw.edu"
 __last_modified__ = "2024-12-19"
 __version__ = "1.0"
-__copyright__ = "Copyright 2024, Andy Schauer"
+__copyright__ = "Copyright 2025, Andy Schauer"
 __license__ = "Apache 2.0"
 
 
@@ -51,9 +51,11 @@ sessions = {
             "session_240813_dolomite": {},
             "session_241004": {},
             "session_241109": {},
-            "session_241203": {}
+            "session_241203": {},
+            "session_241231": {}
             }
 
+starting_UID = [1064, 1809, 2089, 2306, 2889, 3198, 3634, 4156, 4817, 5508, 5934, 6356, 6565, 6739]
 carbonate_standards = ['ETH-1', 'ETH-2', 'ETH-3', 'ETH-4', 'IAEA-C1', 'IAEA-C2', 'MERCK', 'GU1']
 symbol_colors = [(255, 51, 230), (255, 102, 153), (255, 153, 77), (255, 204, 0), 'white', 'tan', 'green', 'blue']
 
@@ -243,44 +245,71 @@ for i,carbonate in enumerate(carbonate_standards):
 fig_n = 1
 vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
 figures[fig_n]['fig'].add_layout(vline)
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
 
 fig_n += 1
 vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
 figures[fig_n]['fig'].add_layout(vline)
 figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
 
 fig_n += 1
 vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
 figures[fig_n]['fig'].add_layout(vline)
 figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
 
 fig_n += 1
 vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
 figures[fig_n]['fig'].add_layout(vline)
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
 
 fig_n += 1
 vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
 figures[fig_n]['fig'].add_layout(vline)
-
-fig_n += 1
-vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
-figures[fig_n]['fig'].add_layout(vline)
-figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
-
-fig_n += 1
-vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
-figures[fig_n]['fig'].add_layout(vline)
-figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
-
-fig_n += 1
-vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
-figures[fig_n]['fig'].add_layout(vline)
-figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
 
 fig_n += 1
 vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
 figures[fig_n]['fig'].add_layout(vline)
 figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
+
+fig_n += 1
+vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
+figures[fig_n]['fig'].add_layout(vline)
+figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
+
+fig_n += 1
+vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
+figures[fig_n]['fig'].add_layout(vline)
+figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
+
+fig_n += 1
+vline = Span(location=5793, dimension='height', line_color='red', line_width=1)
+figures[fig_n]['fig'].add_layout(vline)
+figures[fig_n]['fig'].add_layout(figures[fig_n]['fig'].legend[0], 'right')
+for i in starting_UID:
+    vline = Span(location=i, dimension='height', line_color='green', line_width=1)
+    figures[fig_n]['fig'].add_layout(vline)
 
 
 # -------------------- create html content for report page --------------------

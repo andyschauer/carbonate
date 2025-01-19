@@ -15,13 +15,14 @@ Version 1.3 - 2024.08.14 => updating to get session read in as variable from dat
 Version 1.4 - 2024.08.16 => can filter based on nchops at the command line; included Emma's addition of equilibrated gases
 Version 1.5 - 2024.09.16 => added Kim et al 2015 18O acid fractionation equation
 Version 2.0 - 2024.12.06 => trying to finish this off, or at least make it a final looking report, rather than the snark it is currently populated with
+Version 2.1 - 2025.01.13 => playing with True values of gases 
 """
 
 __author__ = "Andy Schauer"
 __email__ = "aschauer@uw.edu"
-__last_modified__ = "2024-12-06"
-__version__ = "2.0"
-__copyright__ = "Copyright 2024, Andy Schauer"
+__last_modified__ = "2025-01-13"
+__version__ = "2.1"
+__copyright__ = "Copyright 2025, Andy Schauer"
 __license__ = "Apache 2.0"
 __acknowledgements__ = "K. Huntington, E. Heitmann, C. Saenger, S. Mat, V. Ravi, M. Leite. Special thanks to M. Daeron for D47crunch!"
 
@@ -99,7 +100,7 @@ if os.path.exists(archive_path)==False:
     os.mkdir(archive_path)
 
 if os.path.exists(report_path):
-    shutil.move(report_path, os.path.join(archive_path, f"report_{int(dt.datetime.utcnow().timestamp())}"))
+    shutil.move(report_path, os.path.join(archive_path, f"report_{int(dt.datetime.now(dt.UTC).timestamp())}"))
 
 os.mkdir(report_path)
 os.mkdir(f"{report_path}data/")
@@ -156,6 +157,11 @@ for i in refmat_keys:
     globals()[i] = refmat['carbonates'][i]
     globals()[i]['index'] = np.empty(0, dtype="int16")
 
+refmat_keys = refmat['gases']['CDES'].keys()
+for i in refmat_keys:
+    globals()[i] = refmat['gases']['CDES'][i]
+    globals()[i]['index'] = np.empty(0, dtype="int16")
+
 
 # GASES
 # Theoretical Values
@@ -163,20 +169,34 @@ t4 = 4 + 273.15
 t25 = 23 + 273.15
 t60 = 57 + 273.15
 t1000 = 1000 + 273.15
-        
-# “True D47” calculated using Eq. 28 from Wang et al. (2004) and IUPAC parameters ***Preferred equation to replace Dennis et al. (2011) Eq. A2***
+  
+# Preferred equation for true D47 is from Petersen et al. 2019, section S3.2        
+#     “True D47” calculated using Eq. 28 from Wang et al. (2004) and IUPAC parameters ***Preferred equation to replace Dennis et al. (2011) Eq. A2***
 t4_D47rf = 0.00050479*(1000/t4)**7 - 0.00885734*(1000/t4)**6 + 0.06385048*(1000/t4)**5 - 0.23891768*(1000/t4)**4 + 0.46854990*(1000/t4)**3 - 0.34158204*(1000/t4)**2 + 0.12940422*(1000/t4) - 0.01752753;
 t25_D47rf = 0.00050479*(1000/t25)**7 - 0.00885734*(1000/t25)**6 + 0.06385048*(1000/t25)**5 - 0.23891768*(1000/t25)**4 + 0.46854990*(1000/t25)**3 - 0.34158204*(1000/t25)**2 + 0.12940422*(1000/t25) - 0.01752753;
 t60_D47rf = 0.00050479*(1000/t60)**7 - 0.00885734*(1000/t60)**6 + 0.06385048*(1000/t60)**5 - 0.23891768*(1000/t60)**4 + 0.46854990*(1000/t60)**3 - 0.34158204*(1000/t60)**2 + 0.12940422*(1000/t60) - 0.01752753;
 t1000_D47rf = 0.00050479*(1000/t1000)**7 - 0.00885734*(1000/t1000)**6 + 0.06385048*(1000/t1000)**5 - 0.23891768*(1000/t1000)**4 + 0.46854990*(1000/t1000)**3 - 0.34158204*(1000/t1000)**2 + 0.12940422*(1000/t1000) - 0.01752753;
 
+# Andy and Kate typing this in from Frontiers review lookup table
+#t5_D48rf = 0.418308748 # NOTE - this is 5 *C, not 4
+t1000_D48rf = -0.002023846
+
+FCEN4['D47'] = t4_D47rf
+FFSP4['D47'] = t4_D47rf
+FC1000['D47'] = t1000_D47rf
+FF1000['D47'] = t1000_D47rf
+
+#FCEN4['D48'] = t4_D48rf
+#FFSP4['D48'] = t4_D48rf
+FC1000['D48'] = t1000_D48rf
+FF1000['D48'] = t1000_D48rf
 
 
 # USE THESE CARBONATES AND GASES TO CALIBRATE D47 and D48
 d13C_calibration_standards = ['Merck', 'ETH4', 'ETH1']
 d18O_calibration_standards = ['Merck', 'ETH4', 'ETH1']
-D47_calibration_standards = ['ETH1', 'ETH2', 'ETH4', 'Merck', 'IAEAC1', 'IAEAC2']
-D48_calibration_standards = ['ETH1', 'ETH2', 'ETH4', 'GU1']
+D47_calibration_standards = ['ETH1', 'ETH2', 'ETH3', 'ETH4', 'Merck', 'IAEAC1', 'IAEAC2', 'FC1000', 'FF1000', 'FCEN4', 'FFSP4']
+D48_calibration_standards = ['ETH1', 'ETH2', 'ETH4','GU1', 'FC1000', 'FF1000']
 
 
 
@@ -282,8 +302,8 @@ with open(os.path.join(report_path, 'data/', psi_calibrated_session_file), 'w', 
         datawriter.writerow("")
         datawriter.writerows(rows0)
 
-psi47.plot_sessions(dir=f"{report_path}figures/")
-psi48.plot_sessions(dir=f"{report_path}figures/")
+psi47.plot_sessions(dir=f"{report_path}figures/", figsize=(10, 10), filetype='png', dpi=200)
+psi48.plot_sessions(dir=f"{report_path}figures/", figsize=(10, 10), filetype='png', dpi=200)
 
 
 

@@ -40,7 +40,9 @@
 #    2024-08-06 - sometimes a Data file did not "fail" but does not contain any data, which used to cause the script to crash, this update should take care of that edge case 
 #    2024-08-07 - added Session column to samplelog file, which should make D47crunch happier; changed wg_d18O_vpdb to 1.7515 from -7.4; changed 'sn' to UID throughout;
 #    2024-08-09
-#    2024-11-18 - updating after Ashley visit; bellows mode now works, so i have removed the flagging related to bellows mode
+#    2024-11-18 - updating after Ashley visit; bellows mode now works, so i have removed the flagging related to bellows mode,
+#                 I also modified first two figures to make both on scale when the wg and same are severely misbalanced.
+#    2025-01-13 - had to update the date string format from the Data files due to Nu change
 #
 #
 # ToDo:
@@ -53,7 +55,7 @@
 
 # -------------------- Introduction ------------------------
 
-psi_R_version <- "psi.R - v2024.11.18"
+psi_R_version <- "psi.R - v2025.01.13"
 message("\n")
 message("Running ", psi_R_version)
 message("\n")
@@ -361,7 +363,8 @@ if (length(new_session_paths)>0){
                     nu_software_version <- gsub("\"","",raw_data[which(raw_data == "Software Version", arr.ind = TRUE)[1],3])
                     nchops <- gsub(",","",raw_data[which(raw_data == "Number of sample chops", arr.ind = TRUE)[1],2])
                     residual_gas <- gsub(",|\"|\"","",raw_data[which(raw_data == "Max sample pump-over pressure (mBar)", arr.ind = TRUE)[1],2])
-                    analysis_string_time <- strptime(raw_data[2,1], format="Started analysis at %I:%M:%S %p on the %A, %B %d, %Y")
+                    # analysis_string_time <- strptime(raw_data[2,1], format="Started analysis at %I:%M:%S %p on the %A, %B %d, %Y") # this is good for all data before 2025-01-10 - it used to look like this "Started analysis at 9:52:44 PM on the Wednesday, January 8, 2025"
+                    analysis_string_time <- strptime(raw_data[2,1], format="Started analysis at %H:%M:%S on the %d %B %Y") # after 2025-01-10 the date format looks like this # "Started analysis at 10:13:26 on the 10 January 2025"
                     analysis_unix_time <- as.numeric(analysis_string_time)
                     initial_sample_beam <- gsub(",|\"","",raw_data[which(raw_data == "Initial Sam Beam", arr.ind = TRUE)[1],2])
                     pre_balance_sample_beam <- gsub(",|\"","",raw_data[which(raw_data == "Pre-balance Sam Beam", arr.ind = TRUE)[1],2])
@@ -724,18 +727,23 @@ if (length(new_session_paths)>0){
                             layout(matrix(c(1, 2, 3,
                                             4, 5, 6,
                                             7, 8, 9), nrow=3, ncol=3, byrow=TRUE))
-                            
+                            all_44 <- c(wg_cycles_44, sam_cycles_44)
+                            y_limits <- range(all_44)
                             plot(wg_cycles_44, col="red",
                                  xlab="Cycle Number",
                                  ylab="m/z 44 signal (Amps)",
+                                 ylim=y_limits,
                                  cex.lab=lfs)
                             points(sam_cycles_44, col="blue")
-                            
+
+                            all_44_diff <- c(wg_cycles_44_diff, sam_cycles_44_diff)
+                            y_limits <- range(all_44_diff)
                             plot(wg_cycles_44_diff,
                                  col="red",
                                  main = paste(UID, sample_name, sep=" - "),
                                  xlab="Cycle Number",
                                  ylab="signal decay (Amps / cycle)",
+                                 ylim=y_limits,
                                  cex.lab=lfs)
                             points(sam_cycles_44_diff, col="blue")
                             
