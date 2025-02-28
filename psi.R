@@ -43,6 +43,7 @@
 #    2024-11-18 - updating after Ashley visit; bellows mode now works, so i have removed the flagging related to bellows mode,
 #                 I also modified first two figures to make both on scale when the wg and same are severely misbalanced.
 #    2025-01-13 - had to update the date string format from the Data files due to Nu change
+#    2025-02-27 - updated values of reference gas based on vsmow-vpdb.php and D47crunch estimates
 #
 #
 # ToDo:
@@ -55,7 +56,7 @@
 
 # -------------------- Introduction ------------------------
 
-psi_R_version <- "psi.R - v2025.01.13"
+psi_R_version <- "psi.R - v2025.02.27"
 message("\n")
 message("Running ", psi_R_version)
 message("\n")
@@ -186,11 +187,9 @@ Kcalc_vpdb <- vpdb_R17*vpdb_R18^-a
 Kcalc_vsmow <- vsmow_R17*vsmow_R18^-a
 
 # Psi working gas
-#     These are the working gas accepted values relative to VPDB or VSMOW. 
-wg_d13C_vpdb <- -10.2  # this is the value measured using polly against polly working gas that had been calibrated directly to NBS19 and VSMOW as part of the Saenger et al 17O effort
-# wg_d18O_vpdb <- 2.875  # originally entered into psi, changed to -7.4 on 230925
-# wg_d18O_vpdb <- -7.4
-wg_d18O_vpdb <- 2.2  # this is the value measured using polly against polly working gas that had been calibrated directly to NBS19 and VSMOW as part of the Saenger et al 17O effort
+#    Working gas accepted values 
+wg_d13C_vpdb <- -10.16  # VPDB; Measured using polly against polly working gas on 2022.12.27; polly wg had been calibrated directly to NBS19 and VSMOW as part of the Saenger et al 17O effort
+wg_d18O_vpdb <- 2.15  # VPDB_CO2; Measured using polly against polly working gas on 2022.12.27; polly wg had been calibrated directly to NBS19 and VSMOW as part of the Saenger et al 17O effort
 wg_R13 <- (wg_d13C_vpdb/1000+1)*vpdb_R13
 wg_R18 <- (wg_d18O_vpdb/1000+1)*vpdb_R18
 wg_R17 = vpdb_R17*(wg_R18/vpdb_R18)^a
