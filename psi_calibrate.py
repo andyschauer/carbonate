@@ -1,147 +1,55 @@
 """
-This script started out as dressing for M. Daeron's D47crunch carbonate clumped isotope python library. As of version
-1.0, I am trying to have it write a proper report in addition to making full use of D47crunch.
+This script reads in analysis log files from Psi, a Nu Perspective with an attached NuCarb carbonate device, for 
+    calibration and reporting. The brunt of the calibration is via D47crunch, a python library written by M.
+    Daeron; everything else in the present script is dressing, presentation, and exporting of salient data. The
+    raw data from Psi are initially processed via psi.R with the product being the analysis log files read in here.
 
-Version 0.1 - 2023.05.26 => created
-Version 0.5 - 2023.06.02 => now we can set a samples flag to 0 (ignore or exclude) in the raw data file and pass
-    only flag 1 data to D47crunch.
-Version 0.6 - 2024.02.06 => this script is now called from psi_calibrate.Rmd, an Rmarkdown that oversees the calibration
-    of psi data followed by creation of a report.
-Version 0.7 - 2024.04.30 => created way to choose a sample log file to process after dividing sessions into chop2 and chop3
-Version 1.0 - 2024.05.31 => started creating proper report
-Version 1.1 - 2024.07.10 => added GU1 to D48 calibration; added repeated removal of standard as an estimate of accuracy
-Version 1.2 - 2024.08.09 => changed flag to trust
-Version 1.3 - 2024.08.14 => updating to get session read in as variable from data file and used accordingly
-Version 1.4 - 2024.08.16 => can filter based on nchops at the command line; included Emma's addition of equilibrated gases
-Version 1.5 - 2024.09.16 => added Kim et al 2015 18O acid fractionation equation
-Version 2.0 - 2024.12.06 => trying to finish this off, or at least make it a final looking report, rather than the snark it is currently populated with
-Version 2.1 - 2025.01.13 => playing with True values of gases 
+
+Change Log:
+    2023.05.26 => created
+    2023.06.02 => now we can set a samples flag to 0 (ignore or exclude) in the raw data file and pass
+        only flag 1 data to D47crunch.
+    2024.02.06 => this script is now called from psi_calibrate.Rmd, an Rmarkdown that oversees the calibration
+        of psi data followed by creation of a report.
+    2024.04.30 => created way to choose a sample log file to process after dividing sessions into chop2 and chop3
+    2024.05.31 => started creating proper report
+    2024.07.10 => added GU1 to D48 calibration; added repeated removal of standard as an estimate of accuracy
+    2024.08.09 => changed flag to trust
+    2024.08.14 => updating to get session read in as variable from data file and used accordingly
+    2024.08.16 => can filter based on nchops at the command line; included Emma's addition of equilibrated gases
+    2024.09.16 => added Kim et al 2015 18O acid fractionation equation
+    2024.12.06 => trying to finish this off, or at least make it a final looking report, rather than the snark it is currently populated with
+    2025.01.13 => playing with True values of gases
+    2025.01.31 => most of the work needed to get multiple sessions calibrated under a pooled standardization approach works as of this date
+    2025.02.06 => finishing up pooled standardization approach; 
+    2025.02.07 => created while in Psi time, Emma and I editing
+    2025.02.25 => added text above an output table to clarify D47crunch d18O VSMOW values and that they are VSMOW_CO2; I also included a quick blurb about how to convert then to d18O_VSMOW_Carbonate.
+    2025.02.27 => added d18O_VSMOWmineral, d18O_VPDBmineral columns to the calibrated data file
 """
 
 __author__ = "Andy Schauer"
 __email__ = "aschauer@uw.edu"
-__last_modified__ = "2025-01-13"
-__version__ = "2.1"
+__last_modified__ = "2025.02.27"
 __copyright__ = "Copyright 2025, Andy Schauer"
 __license__ = "Apache 2.0"
-__acknowledgements__ = "K. Huntington, E. Heitmann, C. Saenger, S. Mat, V. Ravi, M. Leite. Special thanks to M. Daeron for D47crunch!"
 
 
 
 # -------------------- IMPORTS --------------------
 import argparse
 import csv
+import datetime
 from D47crunch import *
 import isolab_lib
 import json
 import matplotlib.pyplot as pplt
 from natsort import natsorted
 import os
+from pathlib import Path
 import shutil
 import sys
-import time as t
+import time
 import webbrowser
-
-
-
-# ---------- GET SESSION ----------
-project_path = isolab_lib.get_path("psi", "project")
-session_list = natsorted(os.listdir(project_path))
-exclude_from_session_list = ['archive', 'compilations']
-session_list = [session for session in session_list if session not in exclude_from_session_list]
-print('\nChoose a session from the list below:')
-[print(f'    {i}') for i in session_list]
-identified_session = 0
-while identified_session == 0:
-    session_search = input('\nEnter the session you wish to process: ')
-    isdir = [session_search[0: len(session_search)] in x for x in session_list]
-    if len(np.where(isdir)[0]) == 1:
-        identified_session = 1
-        session = session_list[np.where(isdir)[0][0]]
-        print(f'    Processing session {session}...')
-    else:
-        print('\n** More than one session found. **\n')
-
-session_path = f'{project_path}{session}/'
-report_path = f"{session_path}report/"
-
-
-session_file_list = natsorted([file for file in os.listdir(session_path) if "samplelog.csv" in file])
-if len(session_file_list) == 1:
-    identified_session_file = 1
-    session_samplelog = session_file_list[0]
-    print(f'    Processing session file {session_samplelog}...')
-else:
-    print('\nChoose a session log file from the list below:')
-    [print(f'    {i}') for i in session_file_list]
-    identified_session_file = 0
-    while identified_session_file == 0:
-        session_file_search = input('\n\nEnter the session log file you wish to process: ')
-        isdir = [session_file_search[0: len(session_file_search)] in x for x in session_file_list]
-        if len(np.where(isdir)[0]) == 1:
-            identified_session_file = 1
-            session_samplelog = session_file_list[np.where(isdir)[0][0]]
-            print(f'    Processing session file {session_samplelog}...')
-        else:
-            print('\n** More than one session file found. **\n')
-
-D47crunch_input_file = f"psi_{session}_D47crunch_input.csv"
-D47crunch_output_analyses_file = f"{session}_D47crunch_output_all_analyses.csv"
-D47crunch_output_samples_file = f"{session}_D47crunch_output_summarized.csv"
-D47crunch_remove_one_error =  f"{session}_D47crunch_remove_one_error_summarized.csv"
-psi_calibrated_session_file = f"psi_{session}_calibrated.csv"
-
-
-
-# ------------------ CREATE REPORT DIRECTORY -------------------------------
-import datetime as dt
-archive_path = f"{session_path}archive/"
-if os.path.exists(archive_path)==False:
-    os.mkdir(archive_path)
-
-if os.path.exists(report_path):
-    shutil.move(report_path, os.path.join(archive_path, f"report_{int(dt.datetime.now(dt.UTC).timestamp())}"))
-
-os.mkdir(report_path)
-os.mkdir(f"{report_path}data/")
-os.mkdir(f"{report_path}figures/")
-os.mkdir(f"{report_path}scripts/")
-
-shutil.copy2(os.path.join(session_path, session_samplelog), os.path.join(report_path, 'data/', session_samplelog))
-
-
-
-
-# -------------------- SCRIPTS --------------------
-script_path = isolab_lib.get_path("psi", "python")
-scripts = {'psi.R': '', 'isolab_lib.py': '', 'psi_raw_data_report.py': '', 'psi_calibrate.py': ''}
-scripts = {key: (t.strftime('%Y-%m-%d %H:%M:%S', t.localtime(os.path.getmtime(f'{script_path}{key}')))) for key, value in scripts.items()}
-
-[shutil.copy2(os.path.join(script_path, script), os.path.join(report_path, f"scripts/{script}_REPORT_COPY")) for script in scripts]
-shutil.copy2(os.path.join(script_path, 'py_report_style.css'), os.path.join(report_path, 'py_report_style.css'))
-
-
-
-# -------------------- PRE-LOAD RAW DATA FILE AND REMOVE TRUST=0 --------------------
-with open(f"{session_path}{session_samplelog}", 'r') as datafile:
-    reader = csv.reader(datafile)
-    headers = next(reader)
-
-    n_everything = 0
-    rows = []
-    for row in reader:
-        n_everything += 1
-        if int(row[4]) == 1:
-            rows.append(row)
-
-headers.append('Session')
-for row in rows:
-    row.append(session)
-
-with open(f"{report_path}data/{D47crunch_input_file}", 'w', newline='') as datafile:
-    writer = csv.writer(datafile)
-    writer.writerow(headers)
-    writer.writerows(rows)
 
 
 
@@ -162,32 +70,29 @@ for i in refmat_keys:
     globals()[i] = refmat['gases']['CDES'][i]
     globals()[i]['index'] = np.empty(0, dtype="int16")
 
-
 # GASES
 # Theoretical Values
 t4 = 4 + 273.15
 t25 = 23 + 273.15
 t60 = 57 + 273.15
 t1000 = 1000 + 273.15
-  
-# Preferred equation for true D47 is from Petersen et al. 2019, section S3.2        
-#     “True D47” calculated using Eq. 28 from Wang et al. (2004) and IUPAC parameters ***Preferred equation to replace Dennis et al. (2011) Eq. A2***
+        
+# “True D47” calculated using Eq. 28 from Wang et al. (2004) and IUPAC parameters ***Preferred equation to replace Dennis et al. (2011) Eq. A2***
 t4_D47rf = 0.00050479*(1000/t4)**7 - 0.00885734*(1000/t4)**6 + 0.06385048*(1000/t4)**5 - 0.23891768*(1000/t4)**4 + 0.46854990*(1000/t4)**3 - 0.34158204*(1000/t4)**2 + 0.12940422*(1000/t4) - 0.01752753;
 t25_D47rf = 0.00050479*(1000/t25)**7 - 0.00885734*(1000/t25)**6 + 0.06385048*(1000/t25)**5 - 0.23891768*(1000/t25)**4 + 0.46854990*(1000/t25)**3 - 0.34158204*(1000/t25)**2 + 0.12940422*(1000/t25) - 0.01752753;
 t60_D47rf = 0.00050479*(1000/t60)**7 - 0.00885734*(1000/t60)**6 + 0.06385048*(1000/t60)**5 - 0.23891768*(1000/t60)**4 + 0.46854990*(1000/t60)**3 - 0.34158204*(1000/t60)**2 + 0.12940422*(1000/t60) - 0.01752753;
 t1000_D47rf = 0.00050479*(1000/t1000)**7 - 0.00885734*(1000/t1000)**6 + 0.06385048*(1000/t1000)**5 - 0.23891768*(1000/t1000)**4 + 0.46854990*(1000/t1000)**3 - 0.34158204*(1000/t1000)**2 + 0.12940422*(1000/t1000) - 0.01752753;
 
 # Andy and Kate typing this in from Frontiers review lookup table
-#t5_D48rf = 0.418308748 # NOTE - this is 5 *C, not 4
+t5_D48rf = 0.418308748 # NOTE - this is 5 *C, not 4
 t1000_D48rf = -0.002023846
 
 FCEN4['D47'] = t4_D47rf
 FFSP4['D47'] = t4_D47rf
+FCEN4['D48'] = t5_D48rf
+FFSP4['D48'] = t5_D48rf
 FC1000['D47'] = t1000_D47rf
 FF1000['D47'] = t1000_D47rf
-
-#FCEN4['D48'] = t4_D48rf
-#FFSP4['D48'] = t4_D48rf
 FC1000['D48'] = t1000_D48rf
 FF1000['D48'] = t1000_D48rf
 
@@ -196,93 +101,252 @@ FF1000['D48'] = t1000_D48rf
 d13C_calibration_standards = ['Merck', 'ETH4', 'ETH1']
 d18O_calibration_standards = ['Merck', 'ETH4', 'ETH1']
 D47_calibration_standards = ['ETH1', 'ETH2', 'ETH3', 'ETH4', 'Merck', 'IAEAC1', 'IAEAC2', 'FC1000', 'FF1000', 'FCEN4', 'FFSP4']
-D48_calibration_standards = ['ETH1', 'ETH2', 'ETH4','GU1', 'FC1000', 'FF1000']
+D48_calibration_standards = ['ETH1', 'ETH2', 'ETH4','GU1', 'FC1000', 'FF1000', 'FCEN4','FFSP4']
+
+
+
+# -------------------- SETUP and SCRIPTS --------------------
+project_path = isolab_lib.get_path("psi", "project")
+results_path = f"{project_path}Results/"
+
+script_path = isolab_lib.get_path("psi", "python")
+scripts = {'psi.R': '', 'isolab_lib.py': '', 'psi_raw_data_report.py': '', 'psi_calibrate.py': ''}
+scripts = {key: (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(os.path.getmtime(f'{script_path}{key}')))) for key, value in scripts.items()}
+
+
+
+# ------------------ GET / CREATE REPORT DIRECTORY -------------------------------
+
+report_list = natsorted(os.listdir(f"{project_path}Reports/"))
+print('\nChoose your Report directory from the list below:')
+[print(f'    {i}') for i in report_list]
+
+report_found = False
+
+while not report_found:
+    search_string = input('\nEnter the Report you wish to work on today (or leave blank and hit enter to create a new one): ')
+    
+    if not search_string:
+        search_string = input('\nEnter the name of the Report you wish to create: ')
+        Path(f"{project_path}Reports/{search_string}").mkdir(parents=True, exist_ok=True)
+        report = search_string
+        report_found = True
+        print(f"\nReport '{search_string}' created successfully.")
+    else:
+        # Allow for partial matches in the report list
+        matches = [x for x in report_list if search_string in x]
+
+        if len(matches) == 0:
+            print(f"\n    '{search_string}' was not found. Please re-enter your Report again.")
+        elif len(matches) > 1:
+            print(f"\n    More than one Report directory contains '{search_string}'. Please be more specific.")
+        else:
+            report = matches[0]  # Select the uniquely matched report
+            report_found = True
+            print(f"\nUsing report directory: {report}")
+
+report_path = f"{project_path}Reports/{report}/report_{int(datetime.datetime.now(datetime.UTC).timestamp())}"
+os.mkdir(report_path)
+os.mkdir(f"{report_path}/data/")
+os.mkdir(f"{report_path}/figures/")
+os.mkdir(f"{report_path}/scripts/")
+
+
+
+# -------------------- GET SESSION(S) --------------------
+session_list = natsorted(os.listdir(results_path))
+exclude_from_session_list = ['archive', 'compilations']
+session_list = [session for session in session_list if session not in exclude_from_session_list]
+print('\nChoose your session(s) from the list below:')
+[print(f'    {i}') for i in session_list]
+all_sessions_found = False
+while all_sessions_found is False:
+    search_string = input('\nEnter the session(s) you wish to process (separated by commas): ')
+    parsed_string = search_string.split(',')
+    sessions_to_process = []
+
+    for session_search in parsed_string:
+        is_session = [session_search[0: len(session_search)] in x for x in session_list]
+        if len(np.where(is_session)[0]) == 0:
+            print(f"\n    {session_search} was not found. Please re-enter your session(s) again.")
+            break
+        else:
+            sessions_to_process.append(session_search)
+
+    if len(parsed_string) != len(sessions_to_process):
+        continue
+
+    all_sessions_found = True
+    print(f"\n    {len(sessions_to_process)} sessions found to be calibrated.")
+    print("\n\n    Now we will find the samplelog files.")
+
+
+
+# -------------------- GET SAMPLELOG FILE(S) --------------------
+samplelogs_to_process = []
+for session in sessions_to_process:
+    session_path = f'{results_path}{session}/'
+
+    time.sleep(0.5)
+    print(f"    ...looking for all files in {session} that have 'samplelog.csv' in the filename...")
+    
+    session_file_list = natsorted([file for file in os.listdir(session_path) if "samplelog.csv" in file])
+    if len(session_file_list) == 1:
+        identified_session_file = 1
+        session_samplelog = session_file_list[0]
+        print("\n    Got it.")
+        time.sleep(0.5)
+        print(f'\n    Processing session file {session_samplelog}...')
+    else:
+        print('\nMore than one session log file found. Choose one from the list below:')
+        [print(f'    {i}') for i in session_file_list]
+        identified_session_file = 0
+        while identified_session_file == 0:
+            session_file_search = input('\nEnter the session log file you wish to process: ')
+            isdir = [session_file_search[0: len(session_file_search)] in x for x in session_file_list]
+            if len(np.where(isdir)[0]) == 1:
+                identified_session_file = 1
+                session_samplelog = session_file_list[np.where(isdir)[0][0]]
+                print(f'    Processing session file {session_samplelog}...')
+            else:
+                print('\n** More than one session file found. **\n')
+                print(f'\n**     Make sure {isdir[0]} does not exist in any other file names. **\n')
+                print(f'\n**     The best way to name your custom log files is psi_{session}_MY-SESSION-NAME_samplelog.csv. **\n')
+    samplelogs_to_process.append(f"{session_path}{session_samplelog}")
+
+    if len(session_file_list)>1:
+        print('\n\n    Next session...')
+
+
+
+# -------------------- PRE-LOAD RAW DATA FILE(S) AND REMOVE TRUST=0 --------------------
+n_everything = 0  # used in sample accounting below
+for i,samplelog in enumerate(samplelogs_to_process):
+    with open(samplelog, 'r') as datafile:
+        reader = csv.reader(datafile)
+        headers = next(reader)
+
+        rows = []
+        for row in reader:
+            n_everything += 1
+            if int(row[4]) == 1:
+                rows.append(row)
+
+    headers.append('Session')
+    for row in rows:
+        row.append(sessions_to_process[i])
+
+    with open(f"{report_path}/data/{sessions_to_process[i]}_D47crunch_input_file.csv", 'w', newline='') as datafile:
+        writer = csv.writer(datafile)
+        writer.writerow(headers)
+        writer.writerows(rows)
+
+
+
+# -------------------- LOAD INPUT FILES AND CONVERT THEM TO DICTIONARIES --------------------
+data_as_dictionary = {}
+for i, session in enumerate(sessions_to_process):
+    data_as_dictionary[sessions_to_process[i]] = D47data()
+    data_as_dictionary[sessions_to_process[i]].read(f"{report_path}/data/{sessions_to_process[i]}_D47crunch_input_file.csv")
+
+all_sessions = []
+for lst in data_as_dictionary.values():
+    all_sessions += lst
 
 
 
 # -------------------- D47crunch --------------------
-psi47 = D47data(session=session)
+psi47 = D47data(all_sessions)
 
 rxnT = 70
 psi47.ALPHA_18O_ACID_REACTION = np.exp((3.48 * (1000/(rxnT+273.15)) - 1.47)/1000) # Kim et al 2015
-
 psi47.Nominal_d13C_VPDB = {eval(i)['names'][0]: eval(i)['d13C'] for i in d13C_calibration_standards}
 psi47.Nominal_d18O_VPDB = {eval(i)['names'][0]: eval(i)['d18O_vpdb'] for i in d18O_calibration_standards}
 psi47.Nominal_D47 = {eval(i)['names'][0]: eval(i)['D47'] for i in D47_calibration_standards}
+psi47.LEVENE_REF_SAMPLE = 'IAEA-C2'
 
-psi47.read(f"{report_path}data/{D47crunch_input_file}")
 psi47.wg()
 psi47.crunch()
 psi47.standardize()
 psi47.summary(verbose=True, save_to_file=True)
 
 
-psi48 = D48data(psi47, session=session)
-psi48.Nominal_D48 = {eval(i)['names'][0]: eval(i)['D48'] for i in D48_calibration_standards}
+psi48 = D48data(all_sessions)
+psi48.ALPHA_18O_ACID_REACTION = np.exp((3.48 * (1000/(rxnT+273.15)) - 1.47)/1000) # Kim et al 2015
 psi48.Nominal_d13C_VPDB = {eval(i)['names'][0]: eval(i)['d13C'] for i in d13C_calibration_standards}
 psi48.Nominal_d18O_VPDB = {eval(i)['names'][0]: eval(i)['d18O_vpdb'] for i in d18O_calibration_standards}
+psi48.Nominal_D48 = {eval(i)['names'][0]: eval(i)['D48'] for i in D48_calibration_standards}
+psi48.LEVENE_REF_SAMPLE = 'IAEA-C2'
+
+psi48.wg()
 psi48.crunch()
 psi48.standardize()
 psi48.summary(verbose=True)
 
-
-table_of_samples(data47 = psi47,
+table_of_sessions(data47 = psi47,
                   data48 = psi48,
-                  dir = f"{report_path}data/",
-                  filename = D47crunch_output_samples_file,
+                  dir = f"{report_path}/data/",
+                  filename = "D47crunch_table_of_sessions.csv",
                   save_to_file = True,
                   print_out = True,
                   output = None)
 
+table_of_samples(data47 = psi47,
+                 data48 = psi48,
+                 dir = f"{report_path}/data/",
+                 filename = "D47crunch_table_of_samples.csv",
+                 save_to_file = True,
+                 print_out = True,
+                 output = None)
 
 table_of_analyses(data47 = psi47,
                   data48 = psi48,
-                  dir = f"{report_path}data/",
-                  filename = D47crunch_output_analyses_file,
+                  dir = f"{report_path}/data/",
+                  filename = "D47crunch_table_of_analyses.csv",
                   save_to_file = True,
                   print_out = False,
                   output = None)
 
 
+psi47.plot_sessions(dir=f"{report_path}/figures/", figsize=(8, 8), filetype='png', dpi=100)
+psi48.plot_sessions(dir=f"{report_path}/figures/", figsize=(8, 8), filetype='png', dpi=100)
 
-
-# ------------------ remove-one error analysis -------------------------------
-# psi47_remove_one_error_list = ['ETH-1', 'ETH-2', 'ETH-3', 'ETH-4', 'IAEA-C1', 'MERCK', 'IAEA-C2']
-# psi47_removed_D47 = {}
-
-# for removed in psi47_remove_one_error_list:
-
-    # psi47_remove_one_error = D47data(session=session)
-    # [j for j in psi47_remove_one_error_list if j != removed]
-
-    # psi47_remove_one_error.Nominal_D47 = {key: value for key, value in psi47.Nominal_D47.items() if key != removed}
-
-    # psi47_remove_one_error.read(f"{session_path}{D47crunch_input_file}")
-    # psi47_remove_one_error.wg()
-    # psi47_remove_one_error.crunch()
-    # psi47_remove_one_error.standardize()
-
-    # table_of_samples(data47 = psi47_remove_one_error,
-                      # dir = f"{session_path}",
-                      # filename = D47crunch_remove_one_error,
-                      # save_to_file = True,
-                      # print_out = True,
-                      # output = None)
-
-    # herror, derror = isolab_lib.read_file(os.path.join(session_path, D47crunch_remove_one_error), ',')
-
-    # removed_index = [j for j, e in enumerate(derror['Sample']) if str(e).lower() == removed.lower()]
-    # psi47_removed_D47[removed] = {'mean': derror['D47'][removed_index[0]], 'se': derror['SE'][removed_index[0]], 'accuracy': float(derror['D47'][removed_index[0]])-psi47.Nominal_D47[removed]}
-
-    # y = {outer_key: inner_dict['accuracy'] for outer_key, inner_dict in psi47_removed_D47.items()}
-    # y = [key for value, key in y.items()]
-    # x = [value for key, value in psi47.Nominal_D47.items()]
+psi47.plot_distribution_of_analyses(dir=f"{report_path}/figures/", filename='time_distribution', figsize=(8, 8), subplots_adjust=(0.02, 0.13, 0.85, 0.8), dpi=100)
 
 
 
-# -------------------- combine Psi meta data with D47crunch output data --------------------
-h1, d1 = isolab_lib.read_file(os.path.join(report_path, 'data/', D47crunch_input_file), ',')
-h2, d2 = isolab_lib.read_file(os.path.join(report_path, 'data/', D47crunch_output_analyses_file), ',')
+# ------------------------- COMBINE SESSIONS INPUT FILES INTO SINGLE FILE --------------------------
+combined_sessions_file = f"{report_path}/data/D47crunch_session_input_files_combined.csv"
+with open(combined_sessions_file, mode="w", newline="") as output:
+    writer = csv.writer(output)
+    
+    headers = None
+    for i, e in enumerate(sessions_to_process):
+        inputfile = f"{report_path}/data/{sessions_to_process[i]}_D47crunch_input_file.csv"
+        with open(inputfile, mode="r") as file:
+            reader = csv.reader(file)
+            if headers is None:
+                headers = next(reader)
+                writer.writerow(headers)
+            else:
+                next(reader)  # Skip the header row for subsequent files
+            for row in reader:
+                writer.writerow(row)
+
+
+
+# -------------------- combine Psi input data with D47crunch output data --------------------
+
+h1, d1 = isolab_lib.read_file(os.path.join(report_path, "data/", combined_sessions_file), ',')
+h2, d2 = isolab_lib.read_file(os.path.join(report_path, "data/", "D47crunch_table_of_analyses.csv"), ',')
+psi_calibrated_file = 'psi_calibrated_file.csv'
+
+# D47crunch leaves d18O_VSMOW as the d18O of the CO2 relative to VSMOW. Some prefer to think about their carbonate
+#    and not the resulting CO2. As such, the d18O of the carbonate mineral relative to both VSMOW and VPDB are added
+#    to the final calibrated file.
+d2['d18O_VSMOWmineral'] = [str((np.double(i)-8.709)/1.008709) for i in d2['d18O_VSMOW']] # assumes 70*C acid and equation 6 from Kim et al 2015: acid.alpha70 = exp((3.48 * (10^3/(70+273.15)) - 1.47)/1000) which is equal to 1.00870904256074
+d2['d18O_VPDBmineral'] = [str(np.double(i)*0.97001 - 29.99) for i in d2['d18O_VSMOWmineral']]
+
 
 d3 = {**d1, **d2}
 h3=list(d3.keys())
@@ -295,21 +359,18 @@ with open(f"{session_path}{session_samplelog}", 'r') as datafile:
     rows0 = [row for row in reader if int(row[4]) == 0]
 
 
-with open(os.path.join(report_path, 'data/', psi_calibrated_session_file), 'w', newline='') as cal_sesh_file:
+with open(os.path.join(report_path, 'data/', psi_calibrated_file), 'w', newline='') as cal_sesh_file:
         datawriter = csv.writer(cal_sesh_file)
         datawriter.writerow(d3.keys())
         datawriter.writerows(zip(*d3.values()))
         datawriter.writerow("")
         datawriter.writerows(rows0)
 
-psi47.plot_sessions(dir=f"{report_path}figures/", figsize=(10, 10), filetype='png', dpi=200)
-psi48.plot_sessions(dir=f"{report_path}figures/", figsize=(10, 10), filetype='png', dpi=200)
-
 
 
 # ------------------ read in final calibrated file for interactive plotting etc -------------------------------
 
-headers, data = isolab_lib.read_file(os.path.join(report_path, 'data/', psi_calibrated_session_file), ',')
+headers, data = isolab_lib.read_file(os.path.join(report_path, 'data/', psi_calibrated_file), ',')
 
 original_data = data.copy()
 trust0_indices = [i for i, e in enumerate(data['trust']) if int(e) == 0]
@@ -351,11 +412,120 @@ n_trusted = len(set(UID))
 n_standards = len(ETH1['index']) + len(ETH2['index']) + len(ETH3['index']) + len(ETH4['index']) + len(IAEAC1['index']) + len(IAEAC2['index']) + len(Merck['index']) + len(GU1['index'])
 n_samples = n_trusted - n_standards
 
-report_page = os.path.join(report_path, f'{session}_calibration_summary.html')
+
 
 
 # ---------- REPORT BITS ---------- 
+
 print('Making html page...')
+report_page = os.path.join(report_path, '_calibration_summary.html')
+
+style = """
+    header {
+        border: 0px solid black;
+        font-size:1.3rem;
+        height:4rem;
+        width:100%;
+    }
+
+    body{
+        background-color: white;
+        font-family: Arial, Helvetica, sans-serif;
+        height: 100vh;
+    }
+
+    .entire_page{
+        margin: 10px;
+    }
+
+    img{
+        max-width: 100%;
+        padding:2rem;
+    }
+
+    h2,h3{
+        margin-bottom: 0rem;
+        padding-top: 1.0rem;
+        padding-bottom: 0rem;
+    }
+
+    .created-date{
+        float: right;
+        font-size: 0.8rem;
+    }
+
+    .text-indent{
+        margin-left:2rem;
+    }
+
+
+    /* tables */
+    table{
+        border-bottom: 1px solid black;
+    }
+    table th{
+        border-bottom: 1px solid black;
+        text-align: center;
+    }
+    table td{
+        padding-left: 1rem;
+        padding-right: 1rem;
+        text-align: center;
+    }
+    table tr:hover {
+        background-color: #ffff99;
+    }
+
+
+    .figThumb{
+        float:left;
+        margin: 1rem;
+        padding:1rem;
+    }
+
+    .figThumb img{
+        height:auto;
+        margin: 0;
+        padding: 0;
+        width:200px;
+    }
+
+    .clear-both{
+        clear: both;
+        margin-bottom: 2rem;
+    }
+
+    .largeFigs{
+        border:  0px solid black;
+        display:block;
+
+    }
+
+    .largeFigs img{
+        border:  0px solid black;
+        margin: 0;
+        max-width: 100%;
+        padding: 0;
+    }
+
+    .caption{
+        font-size: 1.2rem;
+        margin-left: 2rem;
+        width: 1200px;
+    }
+
+    .thumbcaption{
+        margin-left: 0;
+        padding: 0;
+        text-align: center;
+        width: 200px;
+    }
+
+    .references li{
+        padding-bottom:0.4rem;
+    }
+"""
+
 header = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -363,7 +533,7 @@ header = f"""
         <!-- py by Andrew Schauer -->
         <meta http-equiv="Content-Type" content="text/html charset=UTF-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1">
-        <link rel="stylesheet" type="text/css" href="py_report_style.css">
+        <style>{style}</style>
         <title>Psi Calibration Report</title>
     </head>"""
 
@@ -403,6 +573,15 @@ refmat_block = str([f"""<tr>
                              <td>{eval(i)['purpose']}</td>
                          </tr>""" for i in calibration_standards]).replace("[", "").replace("'", "").replace("]", "").replace(", ", "").replace("\\n", "")
 
+summary_table_of_sessions = "<table>\n"
+with open(f"{report_path}/data/D47crunch_table_of_sessions.csv", "r") as f:
+    reader = csv.reader(f)
+    for i, row in enumerate(reader):
+        if i == 0:
+            summary_table_of_sessions += "<tr>" + "".join(f"<th>{col}</th>" for col in row) + "</tr>\n"
+        else:
+            summary_table_of_sessions += "<tr>" + "".join(f"<td>{col}</td>" for col in row) + "</tr>\n"
+summary_table_of_sessions += "</table>"
 
 D47_summary_table = "<table>\n<tr><th></th><th></th></tr>\n"
 with open("output/D47_summary.csv", "r") as f:
@@ -421,7 +600,7 @@ D48_summary_table += "</table>"
 
 
 replicate_summary_table = "<table>\n"
-with open(f"{report_path}data/{D47crunch_output_samples_file}", "r") as f:
+with open(f"{report_path}/data/D47crunch_table_of_samples.csv", "r") as f:
     reader = csv.reader(f)
     for i, row in enumerate(reader):
         if i == 0:
@@ -430,11 +609,16 @@ with open(f"{report_path}data/{D47crunch_output_samples_file}", "r") as f:
             replicate_summary_table += "<tr>" + "".join(f"<td>{col}</td>" for col in row) + "</tr>\n"
 replicate_summary_table += "</table>"
 
+
+figure_block_1 = [f"""<div class="clear-both"><img src="figures/D47_plot_{session}.png"><hr></div>""" for session in sessions_to_process]
+figure_block_2 = [f"""<div class="clear-both"><img src="figures/D48_plot_{session}.png"><hr></div>""" for session in sessions_to_process]
+figure_block_3 = f"""<div class="clear-both"><img src="figures/time_distribution.png"><hr></div>"""
+
 body = f"""
     <body>
     <div class="entire_page">
-    <h2>Psi Calibration Report - {session}</h2>
-    <div class="created-date">Created - {str(dt.datetime.now())}</div>
+    <h2>Psi Calibration Report - {', '.join(sessions_to_process)}</h2>
+    <div class="created-date">Created - {str(datetime.datetime.now())}</div>
     <h2>Introduction</h2>
     <div class="text-indent">
         <p>This report is meant to be a stand-alone collection of methods,
@@ -455,7 +639,7 @@ body = f"""
 
     <h2>My data</h2>
     <div class="text-indent">
-        <p>This technical stuff is fine and all but where are <strong><a href="data/{psi_calibrated_session_file}">my data</a></strong>?
+        <p>This technical stuff is fine and all but where are <strong><a href="data/psi_calibrated_file">my data</a></strong>?
         This calibrated data file contains sample IDs, dates of analyses, unique analysis numbers, total mass weighed for analysis,
         blah blah and blah. Two sections of data are separated by an empty row. The first section of data are trusted; the second section
         of data are not trusted. Under the "trust" heading, "1" indicates good, trusted data while "0" indicates poor
@@ -500,6 +684,10 @@ body = f"""
 
     <h2>Data quality</h2>
     <div class="text-indent">
+
+        <div class="clear-both"></div>
+        <h3>Summary Table of Sessions</h3>
+        {summary_table_of_sessions}
         <div class="figThumb"><strong>&Delta;<sub>47</sub> Repeatability</strong>
         {D47_summary_table}</div>
 
@@ -509,6 +697,9 @@ body = f"""
         <div class="clear-both"></div>
 
         <h3>Replicate Summary Table</h3>
+        <p>It is important to note that the d18O_vsmow values in the below table, and in all of D47crunch, are that of the CO2, not the carbonate. To convert these d18O_vsmow CO2 values to d18O_vsmow carbonate values
+        you need to convert it based on the acid temperature fractionation factor. Since Psi is at 70*C, we are going to use equation 6 from Kim et al 2015:
+        acid.alpha70 = exp((3.48 * (10^3/(70+273.15)) - 1.47)/1000) which is equal to 1.00870904256074. d18O_VSMOW_Carbonate = (d18O_VSMOW_CO2-8.709)/1.008709.</p>
         <p>{replicate_summary_table}</p>
     </div>
 
@@ -516,9 +707,7 @@ body = f"""
 
     <h2>Figures</h2>"""
 
-figure_block = f"""<div class="clear-both"><img src="figures/D47_plot_{session}.png"><hr></div>
-                   <div class="clear-both"><img src="figures/D48_plot_{session}.png"><hr></div>
-                   """
+
 
 # python_scripts_block = str([f'<li><a href="python/{key}_REPORT_COPY">{key}</a> - {value}</li>' for key, value in python_scripts.items()]).replace("[", "").replace("'", "").replace("]", "").replace(", ", "")
 python_scripts_block = 'python scripts here'
@@ -535,7 +724,7 @@ footer = f"""
                 </ul>
             <li></li>
             <li><a href="https://github.com/andyschauer/shrekCN">github repository</a></li>
-            <li>Data files - <a href="data/{psi_calibrated_session_file}">{psi_calibrated_session_file}</a></li>
+            <li>Data files - <a href="data/psi_calibrated_file">psi_calibrated_file</a></li>
             <li><a href="https://isolab.ess.washington.edu/SOPs/psi.php">Running carbonates on Psi.</a></li>
             <li><a href="report.zip">Zip file of entire report directory.</a></strong>.</li>
         </ul>
@@ -548,8 +737,9 @@ footer = f"""
 with open(report_page, 'w') as report:
     report.write(header)
     report.write(body)
-    report.write(figure_block)
-    # [report.write(i) for i in figure_block]
+    [report.write(i) for i in figure_block_1]
+    [report.write(i) for i in figure_block_2]
+    report.write(figure_block_3)
     report.write(footer)
     report.close()
 webbrowser.open(report_page)
