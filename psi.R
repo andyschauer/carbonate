@@ -43,7 +43,7 @@
 #    2024-11-18 - updating after Ashley visit; bellows mode now works, so i have removed the flagging related to bellows mode,
 #                 I also modified first two figures to make both on scale when the wg and same are severely misbalanced.
 #    2025-01-13 - had to update the date string format from the Data files due to Nu change
-#    2025-02-27 - updated values of reference gas based on vsmow-vpdb.php and D47crunch estimates
+#    2025-02-27 - updated values of reference gas as part of our recent VPDB-VSMOW discussions; ensuring values are consistent with the most thorough measurement from 2022-12-27; and in consideration with D47crunch estimates
 #
 #
 # ToDo:
